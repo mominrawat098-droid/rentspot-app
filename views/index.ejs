@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="/style.css">
+  <title>Rent Spot</title>
+</head>
+<body>
+
+<div class="nav">
+  <div class="container nav-inner">
+    <div class="brand"><div class="logo">🏡</div><a href="/">Rent Spot</a></div>
+
+    <div class="nav-links">
+      <% if(user){ %>
+        <a class="btn" href="/my-bookings">My Bookings</a>
+        <a class="btn" href="/messages">Messages <% if(unread && unread>0){ %>(<%= unread %>)<% } %></a>
+        <% if(user.role === "admin"){ %><a class="btn" href="/admin">Dashboard</a><% } %>
+        <a class="btn" href="/logout">Logout</a>
+      <% } else { %>
+        <a class="btn" href="/login">Login</a>
+        <a class="btn btn-primary" href="/register">Register</a>
+      <% } %>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="hero">
+    <h1>Find a PG that fits your budget</h1>
+    <p>Search by location and filter by price. Book after login (admin approval required).</p>
+
+    <div class="chips">
+      <span class="chip">✔ Maps Location</span>
+      <span class="chip">✔ WhatsApp Contact</span>
+      <span class="chip">✔ Booking + Approval</span>
+      <span class="chip">✔ UPI QR Payment (demo)</span>
+    </div>
+
+    <form method="GET" action="/" class="filter">
+      <input name="q" placeholder="Search (PG name / location)" value="<%= filters && filters.q ? filters.q : '' %>">
+      <input type="number" name="min" placeholder="Min ₹" value="<%= (filters && filters.min!=null) ? filters.min : '' %>">
+      <input type="number" name="max" placeholder="Max ₹" value="<%= (filters && filters.max!=null) ? filters.max : '' %>">
+      <button class="btn btn-primary" type="submit">Filter</button>
+    </form>
+
+    <div style="margin-top:10px;"><a class="btn" href="/">Clear</a></div>
+  </div>
+
+  <div class="section-title">
+    <h2>Available PG</h2>
+    <span>Total: <b><%= (properties || []).length %></b></span>
+  </div>
+
+  <div class="grid">
+    <% if(!properties || properties.length === 0){ %>
+      <div class="card"><div class="card-body">No PG found.</div></div>
+    <% } %>
+
+    <% (properties || []).forEach(p => { %>
+      <div class="card">
+        <div class="img-wrap">
+          <% if(p.image){ %>
+            <img src="/uploads/<%= p.image %>">
+          <% } else { %>
+            <img src="https://via.placeholder.com/600x400?text=No+Image">
+          <% } %>
+          <div class="badge"><%= p.avg_rating || 0 %> ★ (<%= p.rating_count || 0 %>)</div>
+        </div>
+
+        <div class="card-body">
+          <div class="title"><%= p.title %></div>
+          <div class="meta"><%= p.location %></div>
+
+          <div class="row" style="flex-wrap:wrap; justify-content:flex-start;">
+            <div class="price">₹ <%= p.price %>/mo</div>
+            <a class="btn" href="/property/<%= p.id %>">View</a>
+
+            <% if(user){ %>
+              <a class="btn btn-primary" href="/book/<%= p.id %>">Book</a>
+            <% } else { %>
+              <a class="btn btn-primary" href="/login">Login to Book</a>
+            <% } %>
+          </div>
+
+          <div class="row" style="justify-content:flex-start; gap:10px; flex-wrap:wrap;">
+            <a class="btn" target="_blank"
+               href="https://www.google.com/maps/search/?api=1&query=<%= encodeURIComponent(p.location) %>">Location</a>
+
+            <% if(p.contact_phone && p.contact_phone.trim().length>0){ %>
+              <a class="btn" target="_blank"
+                 href="https://wa.me/<%= p.contact_phone.replace(/[^0-9]/g,'') %>?text=<%= encodeURIComponent('Hi, I want details about ' + p.title) %>">WhatsApp</a>
+            <% } else { %>
+              <span class="muted" style="font-size:12px;">No WhatsApp</span>
+            <% } %>
+          </div>
+        </div>
+      </div>
+    <% }) %>
+  </div>
+</div>
+
+</body>
+</html>

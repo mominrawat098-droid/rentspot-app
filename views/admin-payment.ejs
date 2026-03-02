@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="/style.css">
+  <title>Payment Settings</title>
+</head>
+<body>
+
+<div class="nav">
+  <div class="container nav-inner">
+    <div class="brand"><div class="logo">🏡</div><a href="/admin">Admin</a></div>
+    <div class="nav-links">
+      <a class="btn" href="/admin">Dashboard</a>
+      <a class="btn" href="/admin/users">Users</a>
+      <a class="btn" href="/admin/message">Send Message</a>
+      <a class="btn btn-primary" href="/admin/payment">Payment Settings</a>
+      <a class="btn" href="/">Home</a>
+      <a class="btn" href="/logout">Logout</a>
+    </div>
+  </div>
+</div>
+
+<div class="container" style="padding:18px 0 28px;">
+  <div class="section-title">
+    <h2>Payment Settings</h2>
+    <span class="muted">Set UPI ID + QR code</span>
+  </div>
+
+  <% if(error){ %><div class="alert error"><%= error %></div><% } %>
+  <% if(success){ %><div class="alert success"><%= success %></div><% } %>
+
+  <div class="hero-card">
+    <form method="POST" action="/admin/payment" enctype="multipart/form-data">
+      <label>UPI ID</label>
+      <input type="text" name="upi_id" placeholder="example@upi" value="<%= settings && settings.upi_id ? settings.upi_id : '' %>">
+
+      <label>QR Code Image</label>
+      <input type="file" name="qr" accept="image/*">
+
+      <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="btn btn-primary" type="submit">Save</button>
+        <a class="btn" href="/admin">Back</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="hero-card" style="margin-top:14px;">
+    <h3 style="margin:0 0 10px;">Current</h3>
+    <div class="muted">UPI: <b><%= settings && settings.upi_id ? settings.upi_id : '-' %></b></div>
+    <% if(settings && settings.qr_image){ %>
+      <img src="/uploads/<%= settings.qr_image %>" style="max-width:260px;margin-top:10px;border-radius:14px;border:1px solid var(--line);">
+    <% } else { %>
+      <div class="muted" style="margin-top:10px;">No QR uploaded</div>
+    <% } %>
+  </div>
+</div>
+
+</body>
+</html>

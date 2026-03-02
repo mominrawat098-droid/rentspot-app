@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="/style.css">
+  <title>Book PG</title>
+</head>
+<body>
+
+<div class="nav">
+  <div class="container nav-inner">
+    <div class="brand"><div class="logo"></div><a href="/">Rent Spot</a></div>
+    <div class="nav-links">
+      <a class="btn" href="/">Home</a>
+      <a class="btn" href="/my-bookings">My Bookings</a>
+      <a class="btn" href="/messages">Messages <% if(unread && unread>0){ %>(<%= unread %>)<% } %></a>
+      <a class="btn" href="/logout">Logout</a>
+    </div>
+  </div>
+</div>
+
+<div class="container" style="padding:18px 0 28px;">
+  <div class="form-wrap">
+    <h2>Book PG</h2>
+    <p class="muted"><b><%= property.title %></b> • <%= property.location %> • ₹ <%= property.price %>/month</p>
+
+    <form method="POST" action="/book/<%= property.id %>">
+      <label>Full Name</label>
+      <input name="full_name" required placeholder="Your full name">
+
+      <label>Phone</label>
+      <input name="phone" required placeholder="10 digit phone" pattern="[0-9]{10}" title="Enter 10 digit number">
+
+      <label>No. of Persons</label>
+      <input type="number" name="persons" required min="1" value="1">
+
+      <label>Check-in Date</label>
+      <input type="date" name="checkin_date" required>
+
+      <label>Check-out Date</label>
+      <input type="date" name="checkout_date" required>
+
+      <button class="btn btn-primary" style="width:100%; justify-content:center; margin-top:10px;">
+        Submit Booking
+      </button>
+    </form>
+
+    <p class="muted" style="margin-top:10px; font-size:13px;">
+      Note: Booking status will be <b>Pending</b> until Admin approves.
+    </p>
+  </div>
+</div>
+
+</body>
+</html>

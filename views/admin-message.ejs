@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="/style.css">
+  <title>Send Message</title>
+</head>
+<body>
+
+<div class="nav">
+  <div class="container nav-inner">
+    <div class="brand"><div class="logo"></div><a href="/admin">Admin</a></div>
+    <div class="nav-links">
+      <a class="btn" href="/admin">Dashboard</a>
+      <a class="btn" href="/admin/users">Users</a>
+      <a class="btn" href="/">Home</a>
+      <a class="btn" href="/logout">Logout</a>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="form-wrap">
+    <h2>Send Message to User</h2>
+
+    <form method="POST" action="/admin/message">
+      <label>Select User</label>
+      <select name="to_user_id" required style="width:100%; padding:12px; border-radius:12px; border:1px solid var(--line); background:rgba(0,0,0,.25); color:var(--text);">
+        <% users.forEach(u => { %>
+          <option value="<%= u.id %>"><%= u.name %> - <%= u.email %></option>
+        <% }) %>
+      </select>
+
+      <label>Subject</label>
+      <input name="subject" placeholder="eg. Booking Approved" required>
+
+      <label>Message</label>
+      <textarea name="message" placeholder="Write message here..." required></textarea>
+
+      <button class="btn btn-primary" style="width:100%; justify-content:center; padding:12px; border-radius:12px;">
+        Send Message
+      </button>
+    </form>
+  </div>
+</div>
+
+</body>
+</html>

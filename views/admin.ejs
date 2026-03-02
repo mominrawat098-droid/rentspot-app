@@ -1,0 +1,9 @@
+<h2>Admin Panel</h2>
+<a href="/add-property">Add Property</a>
+<hr>
+
+<% bookings.forEach(b => { %>
+  Booking ID: <%= b.id %> |
+  Payment: <%= b.payment_status %>
+  <br>
+<% }) %>

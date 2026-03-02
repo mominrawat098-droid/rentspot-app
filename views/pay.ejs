@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="/style.css">
+  <title>Pay</title>
+</head>
+<body>
+
+<div class="nav">
+  <div class="container nav-inner">
+    <div class="brand"><div class="logo"></div><a href="/">Rent Spot</a></div>
+    <div class="nav-links">
+      <a class="btn" href="/my-bookings">My Bookings</a>
+      <a class="btn" href="/messages">Messages <% if(unread && unread>0){ %>(<%= unread %>)<% } %></a>
+      <a class="btn" href="/logout">Logout</a>
+    </div>
+  </div>
+</div>
+
+<div class="container" style="padding:18px 0 28px;">
+  <div class="hero-card">
+    <h2 style="margin:0 0 6px;">Payment</h2>
+    <div class="muted">
+      <b><%= booking.title %></b> • <%= booking.location %><br>
+      Amount: <b>₹ <%= booking.amount %></b> • Booking ID: <b>#<%= booking.id %></b>
+    </div>
+
+    <div style="margin-top:14px; display:flex; gap:14px; flex-wrap:wrap; align-items:flex-start;">
+      <div style="flex:1; min-width:240px;">
+        <h3 style="margin:0 0 8px;">Pay using UPI</h3>
+
+        <% if(settings && settings.upi_id && settings.upi_id.trim().length > 0){ %>
+          <div class="hero-card" style="padding:12px; margin:0;">
+            <div class="muted">UPI ID:</div>
+            <div style="font-size:18px; font-weight:700;"><%= settings.upi_id %></div>
+            <div class="muted" style="margin-top:6px;">Copy this UPI ID and pay in any UPI app.</div>
+          </div>
+        <% } else { %>
+          <div class="hero-card" style="padding:12px; margin:0;">
+            Admin has not added UPI ID yet.
+          </div>
+        <% } %>
+
+        <div class="muted" style="margin-top:10px;">
+          After payment, enter your <b>Transaction ID</b> below.
+        </div>
+      </div>
+
+      <div style="width:320px; max-width:100%;">
+        <h3 style="margin:0 0 8px;">Scan QR</h3>
+        <% if(settings && settings.qr_image && settings.qr_image.trim().length > 0){ %>
+          <img src="/uploads/<%= settings.qr_image %>" style="width:100%; border-radius:16px; border:1px solid var(--line);">
+          <div class="muted" style="margin-top:6px;">Scan this QR using PhonePe / GPay / Paytm.</div>
+        <% } else { %>
+          <div class="hero-card" style="padding:12px; margin:0;">
+            QR not uploaded by Admin yet.
+          </div>
+        <% } %>
+      </div>
+    </div>
+
+    <hr style="margin:16px 0; border:0; border-top:1px solid var(--line);">
+
+    <form method="POST" action="/pay/<%= booking.id %>">
+      <label>Payment Method</label>
+      <select name="payment_method" required>
+        <option value="UPI">UPI</option>
+        <option value="QR Scan">QR Scan</option>
+        <option value="Cash (Demo)">Cash (Demo)</option>
+      </select>
+
+      <label>Transaction ID / Reference No.</label>
+      <input name="transaction_id" placeholder="Example: 1234567890" required>
+
+      <button class="btn btn-primary" style="width:100%; justify-content:center; margin-top:10px;">
+        Confirm Payment
+      </button>
+    </form>
+
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="/style.css">
+  <title>Register</title>
+</head>
+<body class="auth-body">
+<div class="auth-container">
+
+  <div class="auth-left">
+    <h2>Create Account</h2>
+
+    <% if(error){ %><div class="alert error"><%= error %></div><% } %>
+    <% if(success){ %><div class="alert success"><%= success %></div><% } %>
+
+    <form method="POST" action="/register">
+      <label>Full Name</label>
+      <input type="text" name="name" required>
+
+      <label>Email</label>
+      <input type="email" name="email" required>
+
+      <label>Password</label>
+      <input type="password" name="password" required>
+
+      <button class="btn btn-primary" style="width:100%; margin-top:12px;">SIGN UP</button>
+    </form>
+
+    <div style="margin-top:12px;">
+      <span class="muted">Already have an account?</span>
+      <a class="btn" href="/login" style="margin-left:8px;">Go to Login</a>
+    </div>
+  </div>
+
+  <div class="auth-right">
+    <h2>Welcome Back!</h2>
+    <p>To keep connected with us please login with your personal info</p>
+    <a href="/login" class="btn" style="margin-top:14px;">SIGN IN</a>
+  </div>
+
+</div>
+</body>
+</html>

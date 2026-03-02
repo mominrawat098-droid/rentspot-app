@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="/style.css">
+  <title>Admin Dashboard</title>
+</head>
+<body>
+
+<div class="nav">
+  <div class="container nav-inner">
+    <div class="brand"><div class="logo">🏡</div><a href="/admin">Admin Dashboard</a></div>
+    <div class="nav-links">
+      <a class="btn" href="/admin/users">Users</a>
+      <a class="btn" href="/admin/message">Send Message</a>
+      <a class="btn" href="/admin/payment">Payment Settings</a>
+      <a class="btn" href="/">Home</a>
+      <a class="btn" href="/logout">Logout</a>
+    </div>
+  </div>
+</div>
+
+<div class="container" style="padding:18px 0 28px;">
+  <div class="section-title">
+    <h2>All Bookings</h2>
+    <span class="muted">Total: <b><%= (bookings||[]).length %></b></span>
+  </div>
+
+  <table class="table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>User</th>
+        <th>PG</th>
+        <th>Phone</th>
+        <th>Dates</th>
+        <th>Approval</th>
+        <th>Payment</th>
+        <th>Txn ID</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      <% if(!bookings || bookings.length===0){ %>
+        <tr><td colspan="9" class="muted">No bookings</td></tr>
+      <% } %>
+
+      <% (bookings||[]).forEach(b => { %>
+        <tr>
+          <td><%= b.id %></td>
+
+          <td>
+            <div><b><%= b.user_name %></b></div>
+            <div class="muted"><%= b.user_email %></div>
+          </td>
+
+          <td>
+            <div><b><%= b.property_title %></b></div>
+            <div class="muted"><%= b.property_location %></div>
+          </td>
+
+          <td><%= b.phone %></td>
+
+          <td class="muted">
+            <div><%= b.checkin_date %></div>
+            <div><%= b.checkout_date %></div>
+          </td>
+
+          <td><b><%= b.approval_status %></b></td>
+          <td><b><%= b.payment_status %></b></td>
+          <td class="muted"><%= b.transaction_id || "-" %></td>
+
+          <td style="display:flex; gap:8px; flex-wrap:wrap;">
+            <% if(b.approval_status === "Pending"){ %>
+              <form method="POST" action="/admin/booking/<%= b.id %>/approve">
+                <button class="btn btn-primary" type="submit">Approve</button>
+              </form>
+
+              <form method="POST" action="/admin/booking/<%= b.id %>/reject">
+                <button class="btn" type="submit">Reject</button>
+              </form>
+            <% } else { %>
+              <span class="muted">-</span>
+            <% } %>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+</body>
+</html>
