@@ -1,0 +1,29 @@
+<nav class="nav">
+  <div class="container nav-inner">
+    <div class="brand">
+      <div class="logo"></div>
+      <a href="/">RentSpot</a>
+    </div>
+
+    <div class="nav-links">
+      <a class="btn" href="/">Home</a>
+
+      <% if (user) { %>
+        <a class="btn" href="/profile">Profile</a>
+        <a class="btn" href="/logout">Logout</a>
+      <% } else { %>
+        <a class="btn" href="/login">Login</a>
+        <a class="btn" href="/register">Register</a>
+      <% } %>
+
+      <% if (user && user.role === "admin") { %>
+        <a class="btn" href="/admin">
+          Admin
+          <span class="badge">
+            <%= (typeof adminUnreadCount !== "undefined" ? adminUnreadCount : 0) %>
+          </span>
+        </a>
+      <% } %>
+    </div>
+  </div>
+</nav>
