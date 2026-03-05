@@ -1,24 +1,18 @@
-// database.js (PASTE-READY)
-// SQLite helpers + schema init for RentSpot
-
+// database.js
 const path = require("path");
 const sqlite3 = require("sqlite3").verbose();
 
-// Use file-based sqlite db
-// Render: local disk can reset on redeploy/restart (free plan), but works for demo/testing.
-const DB_FILE = process.env.DB_FILE || path.join(__dirname, "rentspot.db");
+// Render free plan me disk reset ho sakta hai.
+// Local me ye file project ke andar banegi.
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, "rentspot.db");
 
-const db = new sqlite3.Database(DB_FILE, (err) => {
-  if (err) console.error("❌ SQLite open error:", err);
-  else console.log("✅ SQLite connected:", DB_FILE);
-});
+const db = new sqlite3.Database(DB_PATH);
 
-// ---------- Helpers ----------
 function run(sql, params = []) {
   return new Promise((resolve, reject) => {
     db.run(sql, params, function (err) {
       if (err) return reject(err);
-      resolve({ lastID: this.lastID, changes: this.changes });
+      resolve({ id: this.lastID, changes: this.changes });
     });
   });
 }
@@ -41,45 +35,21 @@ function all(sql, params = []) {
   });
 }
 
-// ---------- Schema Init ----------
-async function tableExists(tableName) {
-  const row = await get(
-    `SELECT name FROM sqlite_master WHERE type='table' AND name=?`,
-    [tableName]
-  );
-  return !!row;
-}
-
-async function columnExists(tableName, columnName) {
-  const rows = await all(`PRAGMA table_info(${tableName})`);
-  return rows.some((c) => c.name === columnName);
-}
-
+// ---- Schema + Migration ----
 async function initSchema() {
-  // USERS
+  // users
   await run(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       email TEXT NOT NULL UNIQUE,
-      password_hash TEXT,
+      password_hash TEXT NOT NULL,
       role TEXT NOT NULL DEFAULT 'user',
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
-  // In case old DB exists without password_hash
-  const hasPasswordHash = await columnExists("users", "password_hash");
-  if (!hasPasswordHash) {
-    await run(`ALTER TABLE users ADD COLUMN password_hash TEXT`);
-    console.log("✅ Added missing column: users.password_hash");
-  }
-
-  // If old DB had "password" column and password_hash is empty,
-  // we will NOT auto-migrate because we can't hash plaintext safely if already hashed/unknown.
-  // You can delete db to reset if needed.
-
-  // PROPERTIES
+  // properties (PGs)
   await run(`
     CREATE TABLE IF NOT EXISTS properties (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -90,49 +60,68 @@ async function initSchema() {
       description TEXT,
       image TEXT,
       owner_phone TEXT,
+      whatsapp TEXT,
       location_url TEXT,
-      created_by INTEGER,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
-  // BOOKINGS
-  await run(`
-    CREATE TABLE IF NOT EXISTS bookings (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      property_id INTEGER NOT NULL,
-      status TEXT DEFAULT 'pending',
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  // REVIEWS
+  // reviews
   await run(`
     CREATE TABLE IF NOT EXISTS reviews (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
       property_id INTEGER NOT NULL,
+      user_id INTEGER,
+      user_name TEXT,
       rating INTEGER NOT NULL,
       comment TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(property_id) REFERENCES properties(id)
     )
   `);
 
-  // NOTIFICATIONS
+  // bookings
+  await run(`
+    CREATE TABLE IF NOT EXISTS bookings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      property_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      user_name TEXT,
+      user_email TEXT,
+      status TEXT DEFAULT 'pending',
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(property_id) REFERENCES properties(id),
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    )
+  `);
+
+  // notifications (simple)
   await run(`
     CREATE TABLE IF NOT EXISTS notifications (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER,
-      admin_only INTEGER DEFAULT 0,
-      title TEXT,
-      message TEXT,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
       is_read INTEGER DEFAULT 0,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
-  console.log("✅ All tables ready");
+  // ---- Migration safety: old DB me password_hash column missing ho sakta hai ----
+  // Agar tumhare old users table me 'password' tha ya password_hash missing tha
+  // to ye add ho jayega.
+  try {
+    const cols = await all(`PRAGMA table_info(users)`);
+    const hasPasswordHash = cols.some(c => c.name === "password_hash");
+
+    if (!hasPasswordHash) {
+      await run(`ALTER TABLE users ADD COLUMN password_hash TEXT`);
+      // NOTE: old users ke liye password_hash null rahega.
+      // Tumhe old users ko re-register karna padega.
+    }
+  } catch (e) {
+    // ignore migration errors
+  }
 }
 
 module.exports = {
@@ -141,4 +130,5 @@ module.exports = {
   get,
   all,
   initSchema,
+  DB_PATH,
 };
