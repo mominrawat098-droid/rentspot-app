@@ -1,43 +1,23 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="stylesheet" href="/style.css">
   <title>Messages</title>
+  <link rel="stylesheet" href="/public/style.css">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
 </head>
 <body>
-
-<div class="nav">
-  <div class="container nav-inner">
-    <div class="brand"><div class="logo"></div><a href="/">Rent Spot</a></div>
-    <div class="nav-links">
-      <a class="btn" href="/">Home</a>
-      <a class="btn" href="/my-bookings">My Bookings</a>
-      <a class="btn" href="/logout">Logout</a>
+  <%- include("partials/nav") %>
+  <div class="container">
+    <div class="card">
+      <h2>Messages</h2>
+      <% (list || []).forEach(n => { %>
+        <div class="card">
+          <b><%= n.title %></b>
+          <div class="small"><%= n.created_at %></div>
+          <div style="margin-top:6px;"><%= n.message %></div>
+        </div>
+      <% }) %>
     </div>
   </div>
-</div>
-
-<div class="container" style="padding:18px 0 28px;">
-  <div class="section-title">
-    <h2>Notifications</h2>
-    <span>Total: <b><%= (messages || []).length %></b></span>
-  </div>
-
-  <div class="hero-card">
-    <% if(!messages || messages.length===0){ %>
-      No messages.
-    <% } %>
-
-    <% (messages||[]).forEach(m => { %>
-      <div style="padding:12px 0; border-bottom:1px solid var(--line);">
-        <b><%= m.subject %></b>
-        <div class="muted" style="font-size:12px;"><%= m.created_at %></div>
-        <div style="white-space:pre-wrap; margin-top:6px;"><%= m.message %></div>
-      </div>
-    <% }) %>
-  </div>
-</div>
-
 </body>
 </html>

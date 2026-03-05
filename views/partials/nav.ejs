@@ -1,60 +1,26 @@
-<%
-/**
- * Safe defaults so nav never crashes even if server forgets to send variables
- */
-const u = (typeof user !== "undefined" && user) ? user : null;
-
-const adminUnreadCountSafe =
-  (typeof adminUnreadCount !== "undefined" && adminUnreadCount !== null)
-    ? adminUnreadCount
-    : 0;
-
-const userUnreadCountSafe =
-  (typeof userUnreadCount !== "undefined" && userUnreadCount !== null)
-    ? userUnreadCount
-    : 0;
-
-const isAdmin = u && (u.role === "admin" || u.isAdmin === 1 || u.is_admin === 1);
-%>
-
-<nav class="nav">
-  <div class="container nav-inner">
-    <div class="brand">
-      <div class="logo"></div>
+<div class="nav">
+  <div class="nav-inner container" style="padding: 12px 18px;">
+    <div style="font-weight:800;">
       <a href="/">RentSpot</a>
     </div>
 
     <div class="nav-links">
-      <a class="btn" href="/">Home</a>
+      <a class="btn secondary" href="/">Home</a>
 
-      <% if (!u) { %>
-        <a class="btn" href="/login">Login</a>
-        <a class="btn" href="/register">Register</a>
-      <% } else { %>
+      <% if (currentUser) { %>
+        <a class="btn secondary" href="/my-bookings">My Bookings</a>
+        <a class="btn secondary" href="/notifications">Notifications <span class="badge"><%= userUnreadCount %></span></a>
 
-        <a class="btn" href="/my-bookings">My Bookings</a>
-
-        <a class="btn" href="/notifications">
-          Notifications
-          <span class="badge"><%= userUnreadCountSafe %></span>
-        </a>
-
-        <% if (isAdmin) { %>
+        <% if (currentUser.role === "admin") { %>
           <a class="btn" href="/admin">Admin</a>
-
-          <a class="btn" href="/admin/notifications">
-            Admin Notifications
-            <span class="badge"><%= adminUnreadCountSafe %></span>
-          </a>
-
-          <a class="btn" href="/admin/users">Users</a>
-          <a class="btn" href="/admin/message">Send Message</a>
-          <a class="btn" href="/admin/payment">Payment Settings</a>
-          <a class="btn" href="/admin/properties/add">Add PG</a>
+          <a class="btn secondary" href="/admin/notifications">Admin Alerts <span class="badge"><%= adminUnreadCount %></span></a>
         <% } %>
 
-        <a class="btn" href="/logout">Logout</a>
+        <a class="btn secondary" href="/logout">Logout</a>
+      <% } else { %>
+        <a class="btn secondary" href="/login">Login</a>
+        <a class="btn" href="/register">Register</a>
       <% } %>
     </div>
   </div>
-</nav>
+</div>

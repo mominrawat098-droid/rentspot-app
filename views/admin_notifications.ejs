@@ -1,39 +1,27 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="stylesheet" href="/style.css">
   <title>Admin Notifications</title>
+  <link rel="stylesheet" href="/public/style.css">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
 </head>
 <body>
-  <%- include("partials_nav") %>
-
-  <div class="container" style="padding:18px 0;">
-    <h2>Admin Notifications</h2>
-
-    <form action="/admin/notifications/read-all" method="post" style="margin:10px 0;">
-      <button class="btn" type="submit">Mark all read</button>
-    </form>
-
-    <% if (!items || items.length === 0) { %>
-      <p>No admin notifications.</p>
-    <% } else { %>
-      <div class="card">
-        <% items.forEach(n => { %>
-          <div style="padding:12px; border-bottom:1px solid #eee;">
+  <%- include("partials/nav") %>
+  <div class="container">
+    <div class="card">
+      <h2>Admin Notifications</h2>
+      <% if (!list || list.length === 0) { %>
+        <div class="small">No notifications.</div>
+      <% } else { %>
+        <% list.forEach(n => { %>
+          <div class="card">
             <b><%= n.title %></b>
-            <% if (n.is_read == 0) { %>
-              <span class="pill">NEW</span>
-            <% } %>
+            <div class="small"><%= n.created_at %></div>
             <div style="margin-top:6px;"><%= n.message %></div>
-            <% if (n.link) { %>
-              <div style="margin-top:6px;"><a href="<%= n.link %>">Open</a></div>
-            <% } %>
-            <div class="muted" style="margin-top:6px;"><%= n.created_at %></div>
           </div>
         <% }) %>
-      </div>
-    <% } %>
+      <% } %>
+    </div>
   </div>
 </body>
 </html>

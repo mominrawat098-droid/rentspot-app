@@ -1,9 +1,32 @@
-<h2>Admin Panel</h2>
-<a href="/add-property">Add Property</a>
-<hr>
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin</title>
+  <link rel="stylesheet" href="/public/style.css">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+</head>
+<body>
+  <%- include("partials/nav") %>
+  <div class="container">
+    <div class="card">
+      <h2>Admin Dashboard</h2>
 
-<% bookings.forEach(b => { %>
-  Booking ID: <%= b.id %> |
-  Payment: <%= b.payment_status %>
-  <br>
-<% }) %>
+      <div class="row">
+        <div class="card"><b>Total Users:</b> <%= stats.totalUsers %></div>
+        <div class="card"><b>Pending Users:</b> <%= stats.pendingUsers %></div>
+        <div class="card"><b>Total PGs:</b> <%= stats.totalPGs %></div>
+        <div class="card"><b>Pending Bookings:</b> <%= stats.pendingBookings %></div>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <a class="btn" href="/admin/users">Users</a>
+        <a class="btn" href="/admin/properties/add">Add PG</a>
+        <a class="btn" href="/admin/bookings">Bookings</a>
+        <a class="btn" href="/admin/payment">Payment Settings</a>
+        <a class="btn secondary" href="/admin/notifications">Admin Notifications</a>
+        <a class="btn secondary" href="/admin/message">Broadcast Message</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

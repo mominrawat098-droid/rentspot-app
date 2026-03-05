@@ -1,130 +1,56 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <title><%= pg.title %></title>
+  <link rel="stylesheet" href="/public/style.css">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="stylesheet" href="/style.css">
-  <title><%= property.title %> - Rent Spot</title>
 </head>
 <body>
+  <%- include("partials/nav") %>
 
-<div class="nav">
-  <div class="container nav-inner">
-    <div class="brand"><div class="logo">🏡</div><a href="/">Rent Spot</a></div>
-    <div class="nav-links">
-      <% if(user){ %>
-        <a class="btn" href="/my-bookings">My Bookings</a>
-        <a class="btn" href="/messages">Messages <% if(unread && unread>0){ %>(<%= unread %>)<% } %></a>
-        <% if(user.role==="admin"){ %><a class="btn" href="/admin">Dashboard</a><% } %>
-        <a class="btn" href="/logout">Logout</a>
-      <% } else { %>
-        <a class="btn" href="/login">Login</a>
-        <a class="btn btn-primary" href="/register">Register</a>
-      <% } %>
-    </div>
-  </div>
-</div>
+  <div class="container">
+    <div class="card">
+      <h2><%= pg.title %></h2>
+      <div class="small"><%= pg.address || "" %> <%= pg.city ? (" | " + pg.city) : "" %></div>
+      <div style="margin:8px 0;"><b>₹<%= pg.price %></b> / month</div>
 
-<div class="container" style="padding:18px 0 28px;">
-
-  <div class="section-title">
-    <h2><%= property.title %></h2>
-    <a class="btn" href="/">Back</a>
-  </div>
-
-  <div class="hero-card">
-    <div style="display:grid; grid-template-columns: 1.1fr .9fr; gap:14px;">
-      <div>
-        <% if(property.image){ %>
-          <img src="/uploads/<%= property.image %>" style="width:100%; max-height:320px; object-fit:cover; border-radius:16px; border:1px solid var(--line);">
+      <div class="row" style="margin-top:10px;">
+        <% if (pg.whatsapp_number) { %>
+          <a class="btn" target="_blank" href="https://wa.me/<%= pg.whatsapp_number.replace(/[^0-9]/g,'') %>?text=Hi%20I%20want%20to%20book%20<%= encodeURIComponent(pg.title) %>">WhatsApp</a>
+        <% } %>
+        <% if (pg.location_url) { %>
+          <a class="btn secondary" target="_blank" href="<%= pg.location_url %>">Location</a>
+        <% } %>
+        <% if (currentUser) { %>
+          <a class="btn secondary" href="/book/<%= pg.id %>">Book Now</a>
         <% } else { %>
-          <img src="https://via.placeholder.com/900x500?text=No+Image" style="width:100%; max-height:320px; object-fit:cover; border-radius:16px; border:1px solid var(--line);">
+          <a class="btn secondary" href="/login">Login to Book</a>
         <% } %>
       </div>
+    </div>
 
-      <div>
-        <div class="muted" style="margin-bottom:8px;">
-          <b><%= property.location %></b> • ₹ <b><%= property.price %></b>/month
-        </div>
-
-        <div class="muted" style="margin-bottom:10px;">
-          Rating: <b><%= property.avg_rating || 0 %></b> ★
-          (<%= property.rating_count || 0 %>)
-        </div>
-
-        <div style="margin:10px 0;">
-          <div class="muted" style="margin-bottom:6px;">Description</div>
-          <div><%= property.description || "No description" %></div>
-        </div>
-
-        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
-          <a class="btn" target="_blank"
-             href="https://www.google.com/maps/search/?api=1&query=<%= encodeURIComponent(property.location) %>">Open Location</a>
-
-          <% if(property.contact_phone && property.contact_phone.trim().length>0){ %>
-            <a class="btn" target="_blank"
-               href="https://wa.me/<%= property.contact_phone.replace(/[^0-9]/g,'') %>?text=<%= encodeURIComponent('Hi, I want details about ' + property.title) %>">
-              WhatsApp
-            </a>
-          <% } %>
-
-          <% if(user){ %>
-            <a class="btn btn-primary" href="/book/<%= property.id %>">Book Now</a>
-          <% } else { %>
-            <a class="btn btn-primary" href="/login">Login to Book</a>
-          <% } %>
-
-          <% if(user && user.role==="admin"){ %>
-            <a class="btn" href="/admin/properties/<%= property.id %>/edit">Edit</a>
-            <form method="POST" action="/admin/properties/<%= property.id %>/delete" style="display:inline;">
-              <button class="btn" type="submit" onclick="return confirm('Delete this property?')">Delete</button>
-            </form>
-          <% } %>
-        </div>
+    <div class="card">
+      <h3>Images</h3>
+      <div class="grid">
+        <% (images || []).forEach(img => { %>
+          <img class="img" src="/uploads/<%= img.filename %>">
+        <% }) %>
       </div>
+      <% if (!images || images.length === 0) { %>
+        <div class="small">No images uploaded.</div>
+      <% } %>
+    </div>
+
+    <div class="card">
+      <h3>Details</h3>
+      <p><%= pg.description || "No description." %></p>
+
+      <h4>Facilities</h4>
+      <p><%= pg.facilities || "Not mentioned." %></p>
+
+      <h4>Owner</h4>
+      <div class="small"><%= pg.owner_name || "" %> <%= pg.owner_phone ? (" | " + pg.owner_phone) : "" %></div>
     </div>
   </div>
-
-  <div class="section-title" style="margin-top:18px;">
-    <h2>Reviews</h2>
-    <span class="muted"><%= (reviews || []).length %> total</span>
-  </div>
-
-  <div class="hero-card">
-    <% if(user){ %>
-      <form method="POST" action="/property/<%= property.id %>/rate">
-        <label>Stars (1-5)</label>
-        <select name="stars" required>
-          <option value="5">5 - Excellent</option>
-          <option value="4">4 - Good</option>
-          <option value="3">3 - Ok</option>
-          <option value="2">2 - Bad</option>
-          <option value="1">1 - Very Bad</option>
-        </select>
-
-        <label>Comment (optional)</label>
-        <textarea name="comment" placeholder="Write your review..."></textarea>
-
-        <button class="btn btn-primary" type="submit" style="margin-top:10px;">Submit Review</button>
-      </form>
-      <hr style="border:none;border-top:1px solid var(--line); margin:16px 0;">
-    <% } else { %>
-      <div class="muted">Login to write a review.</div>
-      <hr style="border:none;border-top:1px solid var(--line); margin:16px 0;">
-    <% } %>
-
-    <% if(!reviews || reviews.length===0){ %>
-      <div class="muted">No reviews yet.</div>
-    <% } %>
-
-    <% (reviews || []).forEach(r => { %>
-      <div style="padding:10px 0; border-bottom:1px solid var(--line);">
-        <div style="font-weight:800;"><%= r.name %> • <span class="muted"><%= r.stars %>★</span></div>
-        <div class="muted" style="margin-top:4px;"><%= r.comment || "No comment" %></div>
-      </div>
-    <% }) %>
-  </div>
-
-</div>
-
 </body>
 </html>

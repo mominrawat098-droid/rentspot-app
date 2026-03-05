@@ -1,18 +1,14 @@
-// database.js
 const path = require("path");
 const sqlite3 = require("sqlite3").verbose();
 
-// Render free plan me disk reset ho sakta hai.
-// Local me ye file project ke andar banegi.
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "rentspot.db");
-
 const db = new sqlite3.Database(DB_PATH);
 
 function run(sql, params = []) {
   return new Promise((resolve, reject) => {
     db.run(sql, params, function (err) {
       if (err) return reject(err);
-      resolve({ id: this.lastID, changes: this.changes });
+      resolve(this);
     });
   });
 }
@@ -35,9 +31,7 @@ function all(sql, params = []) {
   });
 }
 
-// ---- Schema + Migration ----
 async function initSchema() {
-  // users
   await run(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,90 +39,78 @@ async function initSchema() {
       email TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL DEFAULT 'user',
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
 
-  // properties (PGs)
   await run(`
     CREATE TABLE IF NOT EXISTS properties (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
       city TEXT,
+      area TEXT,
       address TEXT,
-      price INTEGER DEFAULT 0,
+      price INTEGER NOT NULL DEFAULT 0,
       description TEXT,
-      image TEXT,
+      facilities TEXT,
+      owner_name TEXT,
       owner_phone TEXT,
-      whatsapp TEXT,
+      whatsapp_number TEXT,
       location_url TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      created_by INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
 
-  // reviews
   await run(`
-    CREATE TABLE IF NOT EXISTS reviews (
+    CREATE TABLE IF NOT EXISTS property_images (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       property_id INTEGER NOT NULL,
-      user_id INTEGER,
-      user_name TEXT,
-      rating INTEGER NOT NULL,
-      comment TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      filename TEXT NOT NULL,
+      FOREIGN KEY(property_id) REFERENCES properties(id) ON DELETE CASCADE
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS bookings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      property_id INTEGER NOT NULL,
+      checkin TEXT,
+      checkout TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      payment_status TEXT NOT NULL DEFAULT 'unpaid',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY(user_id) REFERENCES users(id),
       FOREIGN KEY(property_id) REFERENCES properties(id)
     )
   `);
 
-  // bookings
-  await run(`
-    CREATE TABLE IF NOT EXISTS bookings (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      property_id INTEGER NOT NULL,
-      user_id INTEGER NOT NULL,
-      user_name TEXT,
-      user_email TEXT,
-      status TEXT DEFAULT 'pending',
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY(property_id) REFERENCES properties(id),
-      FOREIGN KEY(user_id) REFERENCES users(id)
-    )
-  `);
-
-  // notifications (simple)
   await run(`
     CREATE TABLE IF NOT EXISTS notifications (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER,
       title TEXT NOT NULL,
       message TEXT NOT NULL,
-      is_read INTEGER DEFAULT 0,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      is_read INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
 
-  // ---- Migration safety: old DB me password_hash column missing ho sakta hai ----
-  // Agar tumhare old users table me 'password' tha ya password_hash missing tha
-  // to ye add ho jayega.
-  try {
-    const cols = await all(`PRAGMA table_info(users)`);
-    const hasPasswordHash = cols.some(c => c.name === "password_hash");
+  await run(`
+    CREATE TABLE IF NOT EXISTS payment_settings (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      upi_id TEXT,
+      payee_name TEXT,
+      note TEXT
+    )
+  `);
 
-    if (!hasPasswordHash) {
-      await run(`ALTER TABLE users ADD COLUMN password_hash TEXT`);
-      // NOTE: old users ke liye password_hash null rahega.
-      // Tumhe old users ko re-register karna padega.
-    }
-  } catch (e) {
-    // ignore migration errors
+  const existing = await get(`SELECT id FROM payment_settings WHERE id=1`);
+  if (!existing) {
+    await run(`INSERT INTO payment_settings (id, upi_id, payee_name, note) VALUES (1, '', '', '')`);
   }
 }
 
-module.exports = {
-  db,
-  run,
-  get,
-  all,
-  initSchema,
-  DB_PATH,
-};
+module.exports = { db, run, get, all, initSchema };

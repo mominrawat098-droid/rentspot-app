@@ -1,115 +1,35 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <title>Book</title>
+  <link rel="stylesheet" href="/public/style.css">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="stylesheet" href="/style.css">
-  <title>My Bookings</title>
 </head>
 <body>
+  <%- include("partials/nav") %>
+  <div class="container">
+    <div class="card">
+      <h2>Book: <%= pg.title %></h2>
+      <% if (error) { %><div class="error"><%= error %></div><% } %>
 
-<div class="nav">
-  <div class="container nav-inner">
-    <div class="brand"><div class="logo"></div><a href="/">Rent Spot</a></div>
-    <div class="nav-links">
-      <a class="btn" href="/">Home</a>
-      <a class="btn" href="/messages">Messages <% if(unread && unread>0){ %>(<%= unread %>)<% } %></a>
-      <a class="btn" href="/logout">Logout</a>
+      <form method="post" action="/book/<%= pg.id %>">
+        <div class="row">
+          <div>
+            <label class="label">Check-in</label>
+            <input class="input" name="checkin" type="date">
+          </div>
+          <div>
+            <label class="label">Check-out</label>
+            <input class="input" name="checkout" type="date">
+          </div>
+        </div>
+
+        <div style="margin-top:12px;">
+          <button class="btn" type="submit">Confirm Booking</button>
+        </div>
+        <p class="small" style="margin-top:10px;">Booking will be approved by Admin.</p>
+      </form>
     </div>
   </div>
-</div>
-
-<div class="container" style="padding:18px 0 28px;">
-
-  <div class="section-title">
-    <h2>My Bookings</h2>
-    <span>Total: <b><%= bookings ? bookings.length : 0 %></b></span>
-  </div>
-
-  <% if(!bookings || bookings.length === 0){ %>
-    <div class="hero-card">No bookings yet.</div>
-  <% } else { %>
-
-    <table class="table">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>PG</th>
-          <th>Dates</th>
-          <th>Amount</th>
-          <th>Approval</th>
-          <th>Payment</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-
-      <tbody>
-        <% bookings.forEach(b => { %>
-          <tr>
-            <td><%= b.id %></td>
-
-            <td>
-              <b><%= b.title %></b><br>
-              <span class="muted" style="font-size:12px;"><%= b.location %></span>
-            </td>
-
-            <td>
-              <%= b.checkin_date %> → <%= b.checkout_date %><br>
-              <span class="muted" style="font-size:12px;">Persons: <%= b.persons %></span>
-            </td>
-
-            <td>₹ <%= b.amount %></td>
-
-            <td>
-              <% if(b.approval_status === "Approved"){ %>
-                <span style="color:lightgreen;">Approved</span>
-              <% } else if(b.approval_status === "Rejected"){ %>
-                <span style="color:red;">Rejected</span>
-              <% } else if(b.approval_status === "Cancelled"){ %>
-                <span style="color:orange;">Cancelled</span>
-              <% } else { %>
-                <span style="color:yellow;">Pending</span>
-              <% } %>
-            </td>
-
-            <td>
-              <% if(b.payment_status === "Paid"){ %>
-                <span style="color:lightgreen;">Paid</span>
-                <div class="muted" style="font-size:12px;">
-                  <%= b.payment_method || "" %> • <%= b.transaction_id || "" %>
-                </div>
-              <% } else { %>
-                <span style="color:orange;">Pending</span>
-              <% } %>
-            </td>
-
-            <td>
-              <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                <% if(b.approval_status === "Approved" && b.payment_status === "Pending"){ %>
-                  <a class="btn btn-primary" href="/pay/<%= b.id %>">Pay</a>
-                <% } %>
-
-                <% if(b.approval_status === "Pending" && b.payment_status === "Pending"){ %>
-                  <form method="POST" action="/booking/<%= b.id %>/cancel" style="display:inline;">
-                    <button class="btn" type="submit">Cancel</button>
-                  </form>
-                <% } %>
-
-                <% if(b.contact_phone && b.contact_phone.trim().length>0){ %>
-                  <a class="btn" target="_blank"
-                     href="https://wa.me/<%= b.contact_phone.replace(/[^0-9]/g,'') %>?text=<%= encodeURIComponent('Hi, I have a booking query. Booking ID: ' + b.id) %>">
-                    WhatsApp
-                  </a>
-                <% } %>
-              </div>
-            </td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
-
-  <% } %>
-
-</div>
-
 </body>
 </html>

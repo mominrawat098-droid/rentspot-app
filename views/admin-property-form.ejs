@@ -1,63 +1,74 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <title>Add PG</title>
+  <link rel="stylesheet" href="/public/style.css">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="stylesheet" href="/style.css">
-  <title><%= mode === "add" ? "Add PG" : "Edit PG" %></title>
 </head>
 <body>
+  <%- include("partials/nav") %>
+  <div class="container">
+    <div class="card">
+      <h2>Add PG</h2>
+      <% if (error) { %><div class="error"><%= error %></div><% } %>
 
-<div class="nav">
-  <div class="container nav-inner">
-    <div class="brand"><div class="logo"></div><a href="/admin">Admin</a></div>
-    <div class="nav-links">
-      <a class="btn" href="/admin">Dashboard</a>
-      <a class="btn" href="/admin/users">Users</a>
-      <a class="btn" href="/admin/message">Send Message</a>
-      <a class="btn" href="/">Home</a>
-      <a class="btn" href="/logout">Logout</a>
+      <form method="post" action="/admin/properties/add" enctype="multipart/form-data">
+        <label class="label">Title *</label>
+        <input class="input" name="title" required>
+
+        <div class="row">
+          <div>
+            <label class="label">City</label>
+            <input class="input" name="city">
+          </div>
+          <div>
+            <label class="label">Area</label>
+            <input class="input" name="area">
+          </div>
+        </div>
+
+        <label class="label">Address</label>
+        <input class="input" name="address">
+
+        <label class="label">Price (₹) *</label>
+        <input class="input" name="price" type="number" required>
+
+        <label class="label">Description</label>
+        <textarea class="input" name="description" rows="4"></textarea>
+
+        <label class="label">Facilities</label>
+        <textarea class="input" name="facilities" rows="3"></textarea>
+
+        <div class="row">
+          <div>
+            <label class="label">Owner Name</label>
+            <input class="input" name="owner_name">
+          </div>
+          <div>
+            <label class="label">Owner Phone</label>
+            <input class="input" name="owner_phone">
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label class="label">WhatsApp Number (with country code, e.g. 91xxxxxxxxxx)</label>
+            <input class="input" name="whatsapp_number">
+          </div>
+          <div>
+            <label class="label">Google Maps Location URL</label>
+            <input class="input" name="location_url">
+          </div>
+        </div>
+
+        <label class="label">Images (max 6)</label>
+        <input class="input" name="images" type="file" multiple accept="image/*">
+
+        <div style="margin-top:12px;">
+          <button class="btn" type="submit">Add PG</button>
+        </div>
+      </form>
     </div>
   </div>
-</div>
-
-<div class="container">
-  <div class="form-wrap">
-    <h2><%= mode === "add" ? "Add New PG" : "Edit PG" %></h2>
-
-    <form method="POST" enctype="multipart/form-data"
-      action="<%= mode === 'add' ? '/admin/properties/add' : '/admin/properties/edit/' + property.id %>">
-
-      <label>PG Title</label>
-      <input name="title" required value="<%= property ? property.title : '' %>">
-
-      <label>Location</label>
-      <input name="location" required value="<%= property ? property.location : '' %>">
-
-      <label>Description</label>
-      <textarea name="description" placeholder="PG details..."><%= property ? property.description : '' %></textarea>
-
-      <label>Price (₹ per month)</label>
-      <input type="number" name="price" required value="<%= property ? property.price : '' %>">
-
-      <label>WhatsApp Contact Number (with country code)</label>
-      <input name="contact_phone" placeholder="Example: 919876543210"
-             value="<%= property ? (property.contact_phone || '') : '' %>">
-
-      <label>Photo <span style="color:var(--muted); font-size:12px;">(<%= mode === "add" ? "Required" : "Optional" %>)</span></label>
-      <input type="file" name="image" <%= mode === "add" ? "required" : "" %>>
-
-      <button class="btn btn-primary" style="width:100%; justify-content:center; padding:12px; border-radius:12px;">
-        <%= mode === "add" ? "Add PG" : "Save Changes" %>
-      </button>
-    </form>
-
-    <% if(mode === "edit"){ %>
-      <form method="POST" action="/admin/properties/delete/<%= property.id %>" style="margin-top:12px;">
-        <button class="btn" style="width:100%; justify-content:center;">Delete PG</button>
-      </form>
-    <% } %>
-  </div>
-</div>
-
 </body>
 </html>

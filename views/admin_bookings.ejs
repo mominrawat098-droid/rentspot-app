@@ -1,31 +1,47 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <title>Admin - Bookings</title>
+  <link rel="stylesheet" href="/public/style.css">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="stylesheet" href="/style.css">
-  <title>Bookings</title>
 </head>
 <body>
-  <%- include("partials_nav") %>
+  <%- include("partials/nav") %>
+  <div class="container">
+    <div class="card">
+      <h2>Bookings</h2>
 
-  <div class="container" style="padding:18px 0;">
-    <h2>Bookings (Admin)</h2>
-
-    <% if (!bookings || bookings.length === 0) { %>
-      <p>No bookings.</p>
-    <% } else { %>
-      <div class="card">
-        <% bookings.forEach(b => { %>
-          <div style="padding:12px; border-bottom:1px solid #eee;">
-            <b><%= b.pg_title %></b>
-            <div class="muted">User: <%= b.user_email %></div>
-            <div class="muted">Status: <%= b.status %></div>
-            <div style="margin-top:6px;"><%= b.message || "" %></div>
-            <div class="muted" style="margin-top:6px;"><%= b.created_at %></div>
-          </div>
-        <% }) %>
-      </div>
-    <% } %>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>ID</th><th>PG</th><th>User</th><th>Status</th><th>Dates</th><th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% rows.forEach(b => { %>
+            <tr>
+              <td>#<%= b.id %></td>
+              <td><%= b.pg_title %></td>
+              <td><%= b.user_name %> (<%= b.user_email %>)</td>
+              <td><%= b.status %></td>
+              <td class="small"><%= b.checkin %> - <%= b.checkout %></td>
+              <td>
+                <% if (b.status === "pending") { %>
+                  <form method="post" action="/admin/bookings/<%= b.id %>/approve" style="display:inline;">
+                    <button class="btn" type="submit">Approve</button>
+                  </form>
+                  <form method="post" action="/admin/bookings/<%= b.id %>/reject" style="display:inline;">
+                    <button class="btn secondary" type="submit">Reject</button>
+                  </form>
+                <% } else { %>
+                  <span class="small">-</span>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
   </div>
 </body>
 </html>
