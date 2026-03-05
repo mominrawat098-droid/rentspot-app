@@ -1,36 +1,56 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Payment</title>
-  <link rel="stylesheet" href="/public/style.css">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="/style.css">
+  <title>Pay - Rent Spot</title>
 </head>
 <body>
-  <%- include("partials/nav") %>
-  <div class="container">
-    <div class="card">
-      <h2>Payment</h2>
-      <p><b>Booking:</b> #<%= booking.id %> | <b>PG:</b> <%= booking.title %></p>
-      <p><b>Amount:</b> ₹<%= booking.price %></p>
 
-      <div class="card">
-        <h3>UPI Details</h3>
-        <p><b>Payee:</b> <%= ps.payee_name || "-" %></p>
-        <p><b>UPI ID:</b> <%= ps.upi_id || "-" %></p>
-        <p class="small"><%= ps.note || "" %></p>
-
-        <% if (ps.upi_id) { %>
-          <a class="btn" target="_blank"
-             href="upi://pay?pa=<%= encodeURIComponent(ps.upi_id) %>&pn=<%= encodeURIComponent(ps.payee_name||'RentSpot') %>&am=<%= booking.price %>&cu=INR&tn=<%= encodeURIComponent('Booking '+booking.id) %>">
-            Pay with UPI App
-          </a>
-        <% } else { %>
-          <div class="error">Admin has not set UPI details yet.</div>
-        <% } %>
-      </div>
-
-      <p class="small">Demo payment flow. Real gateway (Razorpay) can be added later.</p>
+<div class="nav">
+  <div class="container nav-inner">
+    <div class="brand"><div class="logo">🏡</div><a href="/">Rent Spot</a></div>
+    <div class="nav-links">
+      <a class="btn" href="/my-bookings">My Bookings</a>
+      <a class="btn" href="/messages">Messages</a>
+      <a class="btn" href="/logout">Logout</a>
     </div>
   </div>
+</div>
+
+<div class="container" style="padding:18px 0 28px;">
+  <h2>Payment</h2>
+
+  <div class="card" style="padding:14px;">
+    <div><b>Booking ID:</b> <%= booking.id %></div>
+    <div><b>PG:</b> <%= booking.property_title %></div>
+    <div class="muted"><%= booking.property_location %></div>
+    <div style="margin-top:8px;"><b>Amount:</b> ₹ <%= booking.amount %></div>
+  </div>
+
+  <div class="card" style="padding:14px; margin-top:12px;">
+    <h3>Pay using UPI</h3>
+    <div class="muted">UPI ID:</div>
+    <div style="font-size:18px; font-weight:800; margin-bottom:8px;">
+      <%= (settings && settings.upi_id) ? settings.upi_id : "Not set by admin" %>
+    </div>
+
+    <% if(settings && settings.qr_image){ %>
+      <img src="/uploads/<%= settings.qr_image %>" alt="QR" style="max-width:260px;border-radius:14px;border:1px solid #e5e7eb;">
+    <% } else { %>
+      <div class="muted">QR not uploaded by admin yet.</div>
+    <% } %>
+
+    <hr style="border:none;border-top:1px solid #e5e7eb;margin:14px 0;">
+
+    <form method="POST" action="/pay/<%= booking.id %>">
+      <label>Enter Transaction ID (UPI Ref No.)</label>
+      <input name="transaction_id" placeholder="e.g. 4412444121411" required style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:10px;margin:8px 0 12px;">
+      <button class="btn btn-primary" type="submit">Submit Payment</button>
+      <a class="btn" href="/my-bookings">Back</a>
+    </form>
+  </div>
+</div>
+
 </body>
 </html>

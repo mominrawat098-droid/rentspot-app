@@ -1,440 +1,512 @@
-require("dotenv").config();
-const path = require("path");
 const express = require("express");
 const session = require("express-session");
-const bcrypt = require("bcryptjs");
+const path = require("path");
 const multer = require("multer");
-
-const { run, get, all, initSchema } = require("./database");
-const { sendMail } = require("./mailer");
+const db = require("./database");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
-app.set("view engine", "ejs");
-app.set("views", path.join(__dirname, "views"));
-
+// ===== MIDDLEWARE =====
 app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
-
-app.use("/public", express.static(path.join(__dirname, "public")));
-app.use("/uploads", express.static(path.join(__dirname, "public", "uploads")));
+app.use(express.static("public"));
+app.use("/uploads", express.static("uploads"));
 
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || "secret",
+    secret: "rentspot_secret_123",
     resave: false,
-    saveUninitialized: false
+    saveUninitialized: false,
   })
 );
 
-// ---------- Multer for multiple images ----------
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(__dirname, "public", "uploads")),
-  filename: (req, file, cb) => {
-    const safe = file.originalname.replace(/\s+/g, "_");
-    cb(null, Date.now() + "_" + safe);
-  }
-});
-const upload = multer({ storage });
+app.set("view engine", "ejs");
 
-// ---------- Helpers ----------
-function requireAuth(req, res, next) {
+// ===== HELPERS =====
+function requireLogin(req, res, next) {
   if (!req.session.user) return res.redirect("/login");
   next();
 }
 function requireAdmin(req, res, next) {
-  if (!req.session.user) return res.redirect("/login");
-  if (req.session.user.role !== "admin") return res.status(403).send("Forbidden");
+  if (!req.session.user || req.session.user.role !== "admin") return res.redirect("/login");
   next();
 }
-async function adminUnreadCount() {
-  const row = await get(`SELECT COUNT(*) as c FROM notifications WHERE (user_id IS NULL) AND is_read=0`);
-  return row?.c || 0;
+
+function notifyUser(toUserId, subject, message) {
+  db.run(
+    "INSERT INTO messages (to_user_id, subject, message, is_read) VALUES (?,?,?,0)",
+    [toUserId, subject, message]
+  );
 }
-async function userUnreadCount(userId) {
-  const row = await get(`SELECT COUNT(*) as c FROM notifications WHERE user_id=? AND is_read=0`, [userId]);
-  return row?.c || 0;
+
+function renderWithUnread(req, res, view, data) {
+  const user = req.session.user || null;
+
+  if (!user) return res.render(view, { ...data, user: null, unread: 0 });
+
+  db.get(
+    "SELECT COUNT(*) AS c FROM messages WHERE to_user_id=? AND is_read=0",
+    [user.id],
+    (err, row) => {
+      const unread = row ? row.c : 0;
+      res.render(view, { ...data, user, unread });
+    }
+  );
 }
 
-app.use(async (req, res, next) => {
-  res.locals.currentUser = req.session.user || null;
-  if (req.session.user?.role === "admin") {
-    res.locals.adminUnreadCount = await adminUnreadCount();
-  } else {
-    res.locals.adminUnreadCount = 0;
-  }
-  if (req.session.user?.id) {
-    res.locals.userUnreadCount = await userUnreadCount(req.session.user.id);
-  } else {
-    res.locals.userUnreadCount = 0;
-  }
-  next();
+// ===== UPLOADS =====
+const propertyStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, "uploads"),
+  filename: (req, file, cb) => cb(null, "p_" + Date.now() + path.extname(file.originalname)),
 });
+const uploadPropertyImage = multer({ storage: propertyStorage });
 
-// ---------- Init DB ----------
-initSchema()
-  .then(() => console.log("DB ready"))
-  .catch((e) => console.error("DB init error", e));
-
-// ---------- Routes ----------
-
-// Home - list properties (pgs)
-app.get("/", async (req, res) => {
-  try {
-    const pgs = await all(`SELECT * FROM properties ORDER BY id DESC`);
-    const images = await all(`SELECT * FROM property_images`);
-    const imageMap = new Map();
-    for (const img of images) {
-      if (!imageMap.has(img.property_id)) imageMap.set(img.property_id, []);
-      imageMap.get(img.property_id).push(img.filename);
-    }
-    res.render("index", { pgs, imageMap });
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Internal Server Error");
-  }
+const qrStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, "uploads"),
+  filename: (req, file, cb) => cb(null, "qr_" + Date.now() + path.extname(file.originalname)),
 });
+const uploadQR = multer({ storage: qrStorage });
 
-// Property detail
-app.get("/pg/:id", async (req, res) => {
-  try {
-    const pg = await get(`SELECT * FROM properties WHERE id=?`, [req.params.id]);
-    if (!pg) return res.status(404).send("Not found");
-    const images = await all(`SELECT filename FROM property_images WHERE property_id=?`, [pg.id]);
-    res.render("property", { pg, images });
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Internal Server Error");
-  }
-});
+// ======================= AUTH =======================
+app.get("/login", (req, res) => res.render("login", { error: null }));
 
-// Register
-app.get("/register", (req, res) => res.render("register", { error: null }));
-app.post("/register", async (req, res) => {
-  try {
-    const { name, email, password } = req.body;
-    if (!name || !email || !password) return res.render("register", { error: "All fields required" });
+app.post("/login", (req, res) => {
+  const email = (req.body.email || "").trim().toLowerCase();
+  const password = (req.body.password || "").trim();
 
-    const existing = await get(`SELECT id FROM users WHERE email=?`, [email.trim().toLowerCase()]);
-    if (existing) return res.render("register", { error: "Email already registered" });
+  db.get("SELECT * FROM users WHERE lower(email)=? AND password=?", [email, password], (err, user) => {
+    if (err) return res.render("login", { error: "DB error" });
+    if (!user) return res.render("login", { error: "Invalid email or password" });
 
-    const password_hash = await bcrypt.hash(password, 10);
-
-    // First user becomes admin + approved
-    const anyUser = await get(`SELECT id FROM users LIMIT 1`);
-    const role = anyUser ? "user" : "admin";
-    const status = anyUser ? "pending" : "approved";
-
-    const result = await run(
-      `INSERT INTO users (name, email, password_hash, role, status) VALUES (?, ?, ?, ?, ?)`,
-      [name.trim(), email.trim().toLowerCase(), password_hash, role, status]
-    );
-
-    // Notify admin when new user registers
-    if (anyUser) {
-      await run(
-        `INSERT INTO notifications (user_id, title, message) VALUES (NULL, ?, ?)`,
-        ["New user registered", `${name} registered with email ${email}. Approve from Admin > Users.`]
-      );
+    // user needs approval
+    if (user.role !== "admin" && user.status !== "Approved") {
+      return res.render("login", { error: "Your account is pending admin approval" });
     }
 
-    res.redirect("/login?registered=1");
-  } catch (err) {
-    console.error(err);
-    res.status(500).render("register", { error: "Server error" });
+    req.session.user = user;
+    if (user.role === "admin") return res.redirect("/admin");
+    return res.redirect("/");
+  });
+});
+
+app.get("/register", (req, res) => res.render("register", { error: null, success: null }));
+
+app.post("/register", (req, res) => {
+  const name = (req.body.name || "").trim();
+  const email = (req.body.email || "").trim().toLowerCase();
+  const password = (req.body.password || "").trim();
+
+  if (!name || !email || !password) {
+    return res.render("register", { error: "All fields are required", success: null });
   }
-});
 
-// Login
-app.get("/login", (req, res) => {
-  res.render("login", { error: null, registered: req.query.registered });
-});
+  db.run(
+    "INSERT INTO users (name,email,password,role,status) VALUES (?,?,?,?,?)",
+    [name, email, password, "user", "Pending"],
+    function (err) {
+      if (err) return res.render("register", { error: "Email already exists", success: null });
 
-app.post("/login", async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    const user = await get(`SELECT * FROM users WHERE email=?`, [email.trim().toLowerCase()]);
-    if (!user) return res.render("login", { error: "Invalid email or password", registered: null });
+      // notify admin
+      db.get("SELECT id FROM users WHERE role='admin' ORDER BY id ASC LIMIT 1", (e2, admin) => {
+        if (admin) notifyUser(admin.id, "New User Registered", `User: ${name} (${email}) pending approval.`);
+      });
 
-    const ok = await bcrypt.compare(password, user.password_hash);
-    if (!ok) return res.render("login", { error: "Invalid email or password", registered: null });
-
-    if (user.role !== "admin" && user.status !== "approved") {
-      return res.render("login", { error: "Your account is pending admin approval", registered: null });
+      res.render("login", { error: "Registered. Wait for admin approval." });
     }
-
-    req.session.user = { id: user.id, name: user.name, role: user.role, email: user.email };
-    res.redirect(user.role === "admin" ? "/admin" : "/");
-  } catch (err) {
-    console.error(err);
-    res.status(500).render("login", { error: "Server error", registered: null });
-  }
+  );
 });
 
 app.get("/logout", (req, res) => {
   req.session.destroy(() => res.redirect("/"));
 });
 
-// User notifications
-app.get("/notifications", requireAuth, async (req, res) => {
-  const list = await all(`SELECT * FROM notifications WHERE user_id=? ORDER BY id DESC`, [req.session.user.id]);
-  await run(`UPDATE notifications SET is_read=1 WHERE user_id=?`, [req.session.user.id]);
-  res.render("notifications", { list });
-});
+// ======================= HOME =======================
+app.get("/", (req, res) => {
+  const q = (req.query.q || "").trim();
+  const min = req.query.min ? Number(req.query.min) : null;
+  const max = req.query.max ? Number(req.query.max) : null;
 
-// Booking
-app.get("/book/:id", requireAuth, async (req, res) => {
-  const pg = await get(`SELECT * FROM properties WHERE id=?`, [req.params.id]);
-  if (!pg) return res.status(404).send("Not found");
-  res.render("book", { pg, error: null });
-});
+  let where = " WHERE 1=1 ";
+  const params = [];
 
-app.post("/book/:id", requireAuth, async (req, res) => {
-  try {
-    const { checkin, checkout } = req.body;
-    const pg = await get(`SELECT * FROM properties WHERE id=?`, [req.params.id]);
-    if (!pg) return res.status(404).send("Not found");
-
-    const r = await run(
-      `INSERT INTO bookings (user_id, property_id, checkin, checkout) VALUES (?, ?, ?, ?)`,
-      [req.session.user.id, pg.id, checkin || "", checkout || ""]
-    );
-
-    await run(
-      `INSERT INTO notifications (user_id, title, message) VALUES (NULL, ?, ?)`,
-      ["New booking request", `Booking #${r.lastID} for PG "${pg.title}" by ${req.session.user.name}`]
-    );
-
-    await run(
-      `INSERT INTO notifications (user_id, title, message) VALUES (?, ?, ?)`,
-      [req.session.user.id, "Booking created", `Your booking request for "${pg.title}" is submitted.`]
-    );
-
-    res.redirect("/my-bookings");
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Internal Server Error");
+  if (q) {
+    where += " AND (p.title LIKE ? OR p.location LIKE ?) ";
+    params.push(`%${q}%`, `%${q}%`);
   }
-});
+  if (min !== null && !Number.isNaN(min)) {
+    where += " AND p.price >= ? ";
+    params.push(min);
+  }
+  if (max !== null && !Number.isNaN(max)) {
+    where += " AND p.price <= ? ";
+    params.push(max);
+  }
 
-app.get("/my-bookings", requireAuth, async (req, res) => {
-  const rows = await all(
-    `SELECT b.*, p.title, p.price FROM bookings b
-     JOIN properties p ON p.id = b.property_id
-     WHERE b.user_id=? ORDER BY b.id DESC`,
-    [req.session.user.id]
-  );
-  res.render("my-bookings", { rows });
-});
+  const sql = `
+    SELECT p.*,
+      (SELECT ROUND(AVG(stars),1) FROM ratings r WHERE r.property_id=p.id) AS avg_rating,
+      (SELECT COUNT(*) FROM ratings r WHERE r.property_id=p.id) AS rating_count
+    FROM properties p
+    ${where}
+    ORDER BY p.id DESC
+  `;
 
-// Payment page (simple UPI settings)
-app.get("/pay/:bookingId", requireAuth, async (req, res) => {
-  const booking = await get(
-    `SELECT b.*, p.title, p.price FROM bookings b
-     JOIN properties p ON p.id=b.property_id
-     WHERE b.id=? AND b.user_id=?`,
-    [req.params.bookingId, req.session.user.id]
-  );
-  if (!booking) return res.status(404).send("Not found");
-
-  const ps = await get(`SELECT * FROM payment_settings WHERE id=1`);
-  res.render("pay", { booking, ps });
-});
-
-// ---------- ADMIN ----------
-app.get("/admin", requireAdmin, async (req, res) => {
-  const totalUsers = await get(`SELECT COUNT(*) as c FROM users`);
-  const pendingUsers = await get(`SELECT COUNT(*) as c FROM users WHERE status='pending' AND role='user'`);
-  const totalPGs = await get(`SELECT COUNT(*) as c FROM properties`);
-  const pendingBookings = await get(`SELECT COUNT(*) as c FROM bookings WHERE status='pending'`);
-  res.render("admin", {
-    stats: {
-      totalUsers: totalUsers.c,
-      pendingUsers: pendingUsers.c,
-      totalPGs: totalPGs.c,
-      pendingBookings: pendingBookings.c
-    }
+  db.all(sql, params, (err, properties) => {
+    if (err) return res.send("Home error: " + err.message);
+    renderWithUnread(req, res, "index", { properties: properties || [], filters: { q, min, max } });
   });
 });
 
-// Admin users approve
-app.get("/admin/users", requireAdmin, async (req, res) => {
-  const users = await all(`SELECT * FROM users ORDER BY id DESC`);
-  res.render("admin_users", { users });
-});
+// ======================= PROPERTY VIEW =======================
+app.get("/property/:id", (req, res) => {
+  const id = req.params.id;
 
-app.post("/admin/users/:id/approve", requireAdmin, async (req, res) => {
-  const user = await get(`SELECT * FROM users WHERE id=?`, [req.params.id]);
-  if (!user) return res.redirect("/admin/users");
+  db.get(
+    `SELECT p.*,
+      (SELECT ROUND(AVG(stars),1) FROM ratings r WHERE r.property_id=p.id) AS avg_rating,
+      (SELECT COUNT(*) FROM ratings r WHERE r.property_id=p.id) AS rating_count
+     FROM properties p WHERE p.id=?`,
+    [id],
+    (err, property) => {
+      if (err || !property) return res.send("Property not found");
 
-  await run(`UPDATE users SET status='approved' WHERE id=?`, [user.id]);
-
-  await run(
-    `INSERT INTO notifications (user_id, title, message) VALUES (?, ?, ?)`,
-    [user.id, "Account approved", "Your account has been approved by admin. You can login now."]
-  );
-
-  // Optional email
-  try {
-    await sendMail({
-      to: user.email,
-      subject: "RentSpot - Account Approved",
-      html: `<p>Hi ${user.name},</p><p>Your account is approved. You can login now.</p>`
-    });
-  } catch (e) {
-    console.error("Email send failed:", e.message);
-  }
-
-  res.redirect("/admin/users");
-});
-
-// Admin add PG form
-app.get("/admin/properties/add", requireAdmin, (req, res) => {
-  res.render("admin_property_form", { error: null });
-});
-
-// Admin add PG (multiple images)
-app.post("/admin/properties/add", requireAdmin, upload.array("images", 6), async (req, res) => {
-  try {
-    const {
-      title, city, area, address, price, description, facilities,
-      owner_name, owner_phone, whatsapp_number, location_url
-    } = req.body;
-
-    if (!title || !price) return res.render("admin_property_form", { error: "Title and Price required" });
-
-    const r = await run(
-      `INSERT INTO properties
-      (title, city, area, address, price, description, facilities, owner_name, owner_phone, whatsapp_number, location_url, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        title, city || "", area || "", address || "",
-        Number(price || 0),
-        description || "", facilities || "",
-        owner_name || "", owner_phone || "", whatsapp_number || "", location_url || "",
-        req.session.user.id
-      ]
-    );
-
-    const files = req.files || [];
-    for (const f of files) {
-      await run(`INSERT INTO property_images (property_id, filename) VALUES (?, ?)`, [r.lastID, f.filename]);
+      db.all(
+        "SELECT r.*, u.name FROM ratings r JOIN users u ON u.id=r.user_id WHERE r.property_id=? ORDER BY r.id DESC",
+        [id],
+        (e2, reviews) => {
+          renderWithUnread(req, res, "property", { property, reviews: reviews || [] });
+        }
+      );
     }
-
-    await run(
-      `INSERT INTO notifications (user_id, title, message) VALUES (NULL, ?, ?)`,
-      ["New PG added", `Admin added PG "${title}"`]
-    );
-
-    res.redirect(`/pg/${r.lastID}`);
-  } catch (err) {
-    console.error(err);
-    res.render("admin_property_form", { error: "Server error while adding PG" });
-  }
+  );
 });
 
-// Admin bookings
-app.get("/admin/bookings", requireAdmin, async (req, res) => {
-  const rows = await all(
-    `SELECT b.*, u.name as user_name, u.email as user_email, p.title as pg_title
+app.post("/property/:id/rate", requireLogin, (req, res) => {
+  const propertyId = req.params.id;
+  const stars = Number(req.body.stars || 0);
+  const comment = (req.body.comment || "").trim();
+  const userId = req.session.user.id;
+
+  if (stars < 1 || stars > 5) return res.redirect("/property/" + propertyId);
+
+  db.run(
+    "INSERT INTO ratings (user_id, property_id, stars, comment) VALUES (?,?,?,?)",
+    [userId, propertyId, stars, comment],
+    () => res.redirect("/property/" + propertyId)
+  );
+});
+
+// ======================= BOOKING =======================
+app.get("/book/:propertyId", requireLogin, (req, res) => {
+  db.get("SELECT * FROM properties WHERE id=?", [req.params.propertyId], (err, p) => {
+    if (err || !p) return res.send("PG not found");
+    renderWithUnread(req, res, "book", { property: p, error: null });
+  });
+});
+
+app.post("/book/:propertyId", requireLogin, (req, res) => {
+  const propertyId = req.params.propertyId;
+  const userId = req.session.user.id;
+
+  const full_name = (req.body.full_name || "").trim();
+  const phone = (req.body.phone || "").trim();
+  const persons = Number(req.body.persons || 1);
+  const checkin_date = (req.body.checkin_date || "").trim();
+  const checkout_date = (req.body.checkout_date || "").trim();
+
+  if (!full_name || !phone || !checkin_date || !checkout_date) return res.redirect("/book/" + propertyId);
+
+  db.get("SELECT * FROM properties WHERE id=?", [propertyId], (err, p) => {
+    if (err || !p) return res.send("PG not found");
+
+    const amount = Number(p.price || 0);
+
+    db.run(
+      `INSERT INTO bookings (
+        user_id, property_id, full_name, phone, persons, checkin_date, checkout_date, amount,
+        approval_status, payment_status, payment_method, transaction_id
+      ) VALUES (?,?,?,?,?,?,?,?,'Pending','Pending','','')`,
+      [userId, propertyId, full_name, phone, persons, checkin_date, checkout_date, amount],
+      function (e2) {
+        if (e2) return res.send("Booking error: " + e2.message);
+
+        db.get("SELECT id FROM users WHERE role='admin' ORDER BY id ASC LIMIT 1", (e3, admin) => {
+          if (admin) notifyUser(admin.id, "New Booking", `Booking request for "${p.title}" by ${req.session.user.email}`);
+        });
+
+        res.redirect("/my-bookings");
+      }
+    );
+  });
+});
+
+app.get("/my-bookings", requireLogin, (req, res) => {
+  const userId = req.session.user.id;
+
+  const sql = `
+    SELECT b.*,
+      p.title AS property_title,
+      p.location AS property_location,
+      IFNULL(p.contact_phone,'') AS contact_phone
+    FROM bookings b
+    JOIN properties p ON p.id=b.property_id
+    WHERE b.user_id=?
+    ORDER BY b.id DESC
+  `;
+
+  db.all(sql, [userId], (err, bookings) => {
+    if (err) return res.send("My bookings error: " + err.message);
+    renderWithUnread(req, res, "my-bookings", { bookings: bookings || [] });
+  });
+});
+
+// ======================= PAY (FIX) =======================
+app.get("/pay/:bookingId", requireLogin, (req, res) => {
+  const bookingId = req.params.bookingId;
+  const userId = req.session.user.id;
+
+  db.get(
+    `SELECT b.*,
+      p.title AS property_title,
+      p.location AS property_location
+     FROM bookings b
+     JOIN properties p ON p.id=b.property_id
+     WHERE b.id=? AND b.user_id=?`,
+    [bookingId, userId],
+    (err, booking) => {
+      if (err || !booking) return res.redirect("/my-bookings");
+
+      if (booking.approval_status !== "Approved") return res.redirect("/my-bookings");
+
+      db.get("SELECT * FROM settings WHERE id=1", (e2, settings) => {
+        if (e2) return res.send("Payment settings error: " + e2.message);
+        renderWithUnread(req, res, "pay", { booking, settings: settings || { upi_id: "", qr_image: "" } });
+      });
+    }
+  );
+});
+
+app.post("/pay/:bookingId", requireLogin, (req, res) => {
+  const bookingId = req.params.bookingId;
+  const userId = req.session.user.id;
+
+  const transaction_id = (req.body.transaction_id || "").trim();
+  if (!transaction_id) return res.redirect("/pay/" + bookingId);
+
+  db.run(
+    `UPDATE bookings
+     SET payment_status='Paid', payment_method='UPI', transaction_id=?
+     WHERE id=? AND user_id=?`,
+    [transaction_id, bookingId, userId],
+    (err) => {
+      if (err) return res.send("Payment update error: " + err.message);
+
+      notifyUser(userId, "Payment Submitted ✅", `Payment submitted for booking #${bookingId}.`);
+
+      db.get("SELECT id FROM users WHERE role='admin' ORDER BY id ASC LIMIT 1", (e2, admin) => {
+        if (admin) notifyUser(admin.id, "Payment Submitted", `Booking #${bookingId} paid. Txn: ${transaction_id}`);
+        res.redirect("/my-bookings");
+      });
+    }
+  );
+});
+
+// ======================= MESSAGES =======================
+app.get("/messages", requireLogin, (req, res) => {
+  const userId = req.session.user.id;
+  db.all("SELECT * FROM messages WHERE to_user_id=? ORDER BY id DESC", [userId], (err, messages) => {
+    if (err) return res.send("Messages error: " + err.message);
+    renderWithUnread(req, res, "messages", { messages: messages || [] });
+  });
+});
+
+app.post("/messages/:id/read", requireLogin, (req, res) => {
+  const userId = req.session.user.id;
+  db.run("UPDATE messages SET is_read=1 WHERE id=? AND to_user_id=?", [req.params.id, userId], () =>
+    res.redirect("/messages")
+  );
+});
+
+// ======================= ADMIN =======================
+app.get("/admin", requireAdmin, (req, res) => {
+  db.all(
+    `SELECT b.*,
+      u.name AS user_name, u.email AS user_email,
+      p.title AS property_title, p.location AS property_location
      FROM bookings b
      JOIN users u ON u.id=b.user_id
      JOIN properties p ON p.id=b.property_id
-     ORDER BY b.id DESC`
-  );
-  res.render("admin_bookings", { rows });
-});
-
-app.post("/admin/bookings/:id/approve", requireAdmin, async (req, res) => {
-  const b = await get(`SELECT * FROM bookings WHERE id=?`, [req.params.id]);
-  if (!b) return res.redirect("/admin/bookings");
-
-  await run(`UPDATE bookings SET status='approved' WHERE id=?`, [b.id]);
-
-  await run(
-    `INSERT INTO notifications (user_id, title, message) VALUES (?, ?, ?)`,
-    [b.user_id, "Booking approved", `Your booking #${b.id} is approved.`]
-  );
-  res.redirect("/admin/bookings");
-});
-
-app.post("/admin/bookings/:id/reject", requireAdmin, async (req, res) => {
-  const b = await get(`SELECT * FROM bookings WHERE id=?`, [req.params.id]);
-  if (!b) return res.redirect("/admin/bookings");
-
-  await run(`UPDATE bookings SET status='rejected' WHERE id=?`, [b.id]);
-
-  await run(
-    `INSERT INTO notifications (user_id, title, message) VALUES (?, ?, ?)`,
-    [b.user_id, "Booking rejected", `Your booking #${b.id} is rejected.`]
-  );
-  res.redirect("/admin/bookings");
-});
-
-// Payment settings
-app.get("/admin/payment", requireAdmin, async (req, res) => {
-  const ps = await get(`SELECT * FROM payment_settings WHERE id=1`);
-  res.render("admin_payment", { ps, saved: req.query.saved });
-});
-
-app.post("/admin/payment", requireAdmin, async (req, res) => {
-  const { upi_id, payee_name, note } = req.body;
-  await run(`UPDATE payment_settings SET upi_id=?, payee_name=?, note=? WHERE id=1`, [upi_id || "", payee_name || "", note || ""]);
-  res.redirect("/admin/payment?saved=1");
-});
-
-// Admin notifications (system)
-app.get("/admin/notifications", requireAdmin, async (req, res) => {
-  const list = await all(`SELECT * FROM notifications WHERE user_id IS NULL ORDER BY id DESC`);
-  await run(`UPDATE notifications SET is_read=1 WHERE user_id IS NULL`);
-  res.render("admin_notifications", { list });
-});
-
-// Admin message broadcast (store + optional email)
-app.get("/admin/message", requireAdmin, (req, res) => {
-  res.render("admin_message", { sent: null, error: null });
-});
-
-app.post("/admin/message", requireAdmin, async (req, res) => {
-  try {
-    const { title, message } = req.body;
-    if (!title || !message) return res.render("admin_message", { sent: null, error: "Title & message required" });
-
-    const users = await all(`SELECT * FROM users WHERE role='user' AND status='approved'`);
-    for (const u of users) {
-      await run(`INSERT INTO notifications (user_id, title, message) VALUES (?, ?, ?)`, [u.id, title, message]);
-
-      try {
-        await sendMail({
-          to: u.email,
-          subject: `RentSpot: ${title}`,
-          html: `<p>${message}</p>`
-        });
-      } catch (e) {
-        // ignore email failure
-      }
+     ORDER BY b.id DESC`,
+    [],
+    (err, bookings) => {
+      if (err) return res.send("Admin error: " + err.message);
+      renderWithUnread(req, res, "admin-dashboard", { bookings: bookings || [], s: "" });
     }
-    res.render("admin_message", { sent: "Sent to all approved users", error: null });
-  } catch (err) {
-    console.error(err);
-    res.render("admin_message", { sent: null, error: "Server error" });
+  );
+});
+
+// ✅ booking approve/reject
+app.post("/admin/booking/:id/approve", requireAdmin, (req, res) => {
+  const id = req.params.id;
+
+  db.get("SELECT * FROM bookings WHERE id=?", [id], (err, b) => {
+    if (err || !b) return res.redirect("/admin");
+
+    db.run("UPDATE bookings SET approval_status='Approved' WHERE id=?", [id], (e2) => {
+      if (e2) return res.send("Booking approve error: " + e2.message);
+
+      notifyUser(b.user_id, "Booking Approved ✅", `Your booking #${id} is approved. Now you can pay.`);
+      res.redirect("/admin");
+    });
+  });
+});
+
+app.post("/admin/booking/:id/reject", requireAdmin, (req, res) => {
+  const id = req.params.id;
+
+  db.get("SELECT * FROM bookings WHERE id=?", [id], (err, b) => {
+    if (err || !b) return res.redirect("/admin");
+
+    db.run("UPDATE bookings SET approval_status='Rejected' WHERE id=?", [id], (e2) => {
+      if (e2) return res.send("Booking reject error: " + e2.message);
+
+      notifyUser(b.user_id, "Booking Rejected ❌", `Your booking #${id} has been rejected by admin.`);
+      res.redirect("/admin");
+    });
+  });
+});
+
+// users page
+app.get("/admin/users", requireAdmin, (req, res) => {
+  db.all("SELECT * FROM users WHERE role='user' ORDER BY id DESC", (err, users) => {
+    if (err) return res.send("Admin users error: " + err.message);
+    renderWithUnread(req, res, "admin-users", { users: users || [] });
+  });
+});
+
+app.post("/admin/users/approve/:id", requireAdmin, (req, res) => {
+  const id = req.params.id;
+
+  db.get("SELECT * FROM users WHERE id=?", [id], (err, user) => {
+    if (err || !user) return res.redirect("/admin/users");
+
+    db.run("UPDATE users SET status='Approved' WHERE id=?", [id], (e2) => {
+      if (e2) return res.send("Approve error: " + e2.message);
+
+      notifyUser(user.id, "Account Approved ✅", "Your account has been approved. You can now login and book PG.");
+      res.redirect("/admin/users");
+    });
+  });
+});
+
+app.post("/admin/users/reject/:id", requireAdmin, (req, res) => {
+  const id = req.params.id;
+
+  db.get("SELECT * FROM users WHERE id=?", [id], (err, user) => {
+    if (err || !user) return res.redirect("/admin/users");
+
+    db.run("UPDATE users SET status='Rejected' WHERE id=?", [id], (e2) => {
+      if (e2) return res.send("Reject error: " + e2.message);
+
+      notifyUser(user.id, "Account Rejected ❌", "Your account has been rejected by admin.");
+      res.redirect("/admin/users");
+    });
+  });
+});
+
+// add property
+app.get("/admin/properties/add", requireAdmin, (req, res) => {
+  renderWithUnread(req, res, "admin-property-form", { mode: "add", property: null, error: null });
+});
+
+app.post("/admin/properties/add", requireAdmin, uploadPropertyImage.single("image"), (req, res) => {
+  const title = (req.body.title || "").trim();
+  const location = (req.body.location || "").trim();
+  const description = (req.body.description || "").trim();
+  const price = Number(req.body.price || 0);
+  const contact_phone = (req.body.contact_phone || "").trim();
+  const image = req.file ? req.file.filename : null;
+
+  if (!title || !location || !price) {
+    return renderWithUnread(req, res, "admin-property-form", {
+      mode: "add",
+      property: null,
+      error: "Title, location, price required",
+    });
   }
+
+  db.run(
+    "INSERT INTO properties (title,location,description,price,image,contact_phone) VALUES (?,?,?,?,?,?)",
+    [title, location, description, price, image, contact_phone],
+    (err) => {
+      if (err) return res.send("Add PG error: " + err.message);
+      res.redirect("/");
+    }
+  );
 });
 
-// Simple messages page (for user)
-app.get("/messages", requireAuth, async (req, res) => {
-  const list = await all(`SELECT * FROM notifications WHERE user_id=? ORDER BY id DESC`, [req.session.user.id]);
-  res.render("messages", { list });
+// admin send message
+app.get("/admin/message", requireAdmin, (req, res) => {
+  db.all("SELECT id, name, email FROM users WHERE role='user' ORDER BY id DESC", (err, users) => {
+    renderWithUnread(req, res, "admin-message", { users: users || [], error: null, success: null });
+  });
 });
 
-// Health
-app.get("/health", (req, res) => res.json({ ok: true }));
+app.post("/admin/message", requireAdmin, (req, res) => {
+  const to_user_id = Number(req.body.to_user_id || 0);
+  const subject = (req.body.subject || "").trim();
+  const message = (req.body.message || "").trim();
 
-// Global error
-app.use((err, req, res, next) => {
-  console.error("Unhandled:", err);
-  res.status(500).send("Internal Server Error");
+  db.all("SELECT id, name, email FROM users WHERE role='user' ORDER BY id DESC", (err, users) => {
+    if (!to_user_id || !subject || !message) {
+      return renderWithUnread(req, res, "admin-message", {
+        users: users || [],
+        error: "All fields required",
+        success: null,
+      });
+    }
+
+    notifyUser(to_user_id, subject, message);
+    renderWithUnread(req, res, "admin-message", { users: users || [], error: null, success: "Message sent ✅" });
+  });
 });
 
-app.listen(PORT, () => console.log(`Server running on ${PORT}`));
+// payment settings
+app.get("/admin/payment", requireAdmin, (req, res) => {
+  db.get("SELECT * FROM settings WHERE id=1", (err, settings) => {
+    if (err) return res.render("admin-payment", { settings: null, error: err.message, success: null });
+
+    if (!settings) {
+      db.run("INSERT INTO settings (id, upi_id, qr_image) VALUES (1,'','')", () => {
+        db.get("SELECT * FROM settings WHERE id=1", (e2, settings2) => {
+          res.render("admin-payment", { settings: settings2, error: null, success: null });
+        });
+      });
+      return;
+    }
+
+    res.render("admin-payment", { settings, error: null, success: null });
+  });
+});
+
+app.post("/admin/payment", requireAdmin, uploadQR.single("qr"), (req, res) => {
+  const upi_id = (req.body.upi_id || "").trim();
+
+  db.get("SELECT * FROM settings WHERE id=1", (err, old) => {
+    if (err) return res.render("admin-payment", { settings: null, error: err.message, success: null });
+
+    const qr_image = req.file ? req.file.filename : (old ? old.qr_image : "");
+
+    db.run("UPDATE settings SET upi_id=?, qr_image=? WHERE id=1", [upi_id, qr_image], (e2) => {
+      if (e2) return res.render("admin-payment", { settings: old, error: e2.message, success: null });
+
+      db.get("SELECT * FROM settings WHERE id=1", (e3, settings2) => {
+        if (e3) return res.render("admin-payment", { settings: null, error: e3.message, success: null });
+        res.render("admin-payment", { settings: settings2, error: null, success: "Saved ✅" });
+      });
+    });
+  });
+});
+
+// ===== SERVER =====
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("Server running on port " + PORT));

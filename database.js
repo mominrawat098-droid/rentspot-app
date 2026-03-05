@@ -1,116 +1,78 @@
-const path = require("path");
 const sqlite3 = require("sqlite3").verbose();
+const db = new sqlite3.Database("./rentspot.db");
 
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, "rentspot.db");
-const db = new sqlite3.Database(DB_PATH);
+db.serialize(() => {
+  db.run(`CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password TEXT NOT NULL,
+    role TEXT DEFAULT 'user',
+    status TEXT DEFAULT 'Pending'
+  )`);
 
-function run(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
-      if (err) return reject(err);
-      resolve(this);
-    });
+  db.run(`CREATE TABLE IF NOT EXISTS properties (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    location TEXT NOT NULL,
+    description TEXT,
+    price INTEGER NOT NULL DEFAULT 0,
+    image TEXT,
+    contact_phone TEXT
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS ratings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    property_id INTEGER NOT NULL,
+    stars INTEGER NOT NULL,
+    comment TEXT,
+    UNIQUE(user_id, property_id)
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS bookings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    property_id INTEGER NOT NULL,
+    full_name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    persons INTEGER NOT NULL DEFAULT 1,
+    checkin_date TEXT NOT NULL,
+    checkout_date TEXT NOT NULL,
+    amount INTEGER NOT NULL DEFAULT 0,
+    approval_status TEXT DEFAULT 'Pending',
+    payment_status TEXT DEFAULT 'Pending',
+    payment_method TEXT,
+    transaction_id TEXT
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    to_user_id INTEGER NOT NULL,
+    subject TEXT NOT NULL,
+    message TEXT NOT NULL,
+    is_read INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS settings (
+    id INTEGER PRIMARY KEY CHECK (id=1),
+    upi_id TEXT,
+    qr_image TEXT
+  )`);
+
+  db.get("SELECT id FROM settings WHERE id=1", (err, row) => {
+    if (!row) db.run("INSERT INTO settings (id, upi_id, qr_image) VALUES (1,'','')");
   });
-}
 
-function get(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) return reject(err);
-      resolve(row);
-    });
+  db.get("SELECT id FROM users WHERE email=?", ["admin@gmail.com"], (err, row) => {
+    if (!row) {
+      db.run(
+        "INSERT INTO users (name,email,password,role,status) VALUES (?,?,?,?,?)",
+        ["Admin", "admin@gmail.com", "1234", "admin", "Approved"]
+      );
+    }
   });
-}
+});
 
-function all(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) return reject(err);
-      resolve(rows);
-    });
-  });
-}
-
-async function initSchema() {
-  await run(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      email TEXT NOT NULL UNIQUE,
-      password_hash TEXT NOT NULL,
-      role TEXT NOT NULL DEFAULT 'user',
-      status TEXT NOT NULL DEFAULT 'pending',
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-
-  await run(`
-    CREATE TABLE IF NOT EXISTS properties (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT NOT NULL,
-      city TEXT,
-      area TEXT,
-      address TEXT,
-      price INTEGER NOT NULL DEFAULT 0,
-      description TEXT,
-      facilities TEXT,
-      owner_name TEXT,
-      owner_phone TEXT,
-      whatsapp_number TEXT,
-      location_url TEXT,
-      created_by INTEGER,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-
-  await run(`
-    CREATE TABLE IF NOT EXISTS property_images (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      property_id INTEGER NOT NULL,
-      filename TEXT NOT NULL,
-      FOREIGN KEY(property_id) REFERENCES properties(id) ON DELETE CASCADE
-    )
-  `);
-
-  await run(`
-    CREATE TABLE IF NOT EXISTS bookings (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      property_id INTEGER NOT NULL,
-      checkin TEXT,
-      checkout TEXT,
-      status TEXT NOT NULL DEFAULT 'pending',
-      payment_status TEXT NOT NULL DEFAULT 'unpaid',
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY(user_id) REFERENCES users(id),
-      FOREIGN KEY(property_id) REFERENCES properties(id)
-    )
-  `);
-
-  await run(`
-    CREATE TABLE IF NOT EXISTS notifications (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER,
-      title TEXT NOT NULL,
-      message TEXT NOT NULL,
-      is_read INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-
-  await run(`
-    CREATE TABLE IF NOT EXISTS payment_settings (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      upi_id TEXT,
-      payee_name TEXT,
-      note TEXT
-    )
-  `);
-
-  const existing = await get(`SELECT id FROM payment_settings WHERE id=1`);
-  if (!existing) {
-    await run(`INSERT INTO payment_settings (id, upi_id, payee_name, note) VALUES (1, '', '', '')`);
-  }
-}
-
-module.exports = { db, run, get, all, initSchema };
+module.exports = db;

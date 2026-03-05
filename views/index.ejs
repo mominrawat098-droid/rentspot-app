@@ -1,50 +1,81 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>RentSpot</title>
-  <link rel="stylesheet" href="/public/style.css">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="/style.css">
+  <title>Rent Spot</title>
 </head>
 <body>
-  <%- include("partials/nav") %>
 
-  <div class="container">
-    <div class="card">
-      <h2>Available PGs</h2>
-      <p class="small">Browse and book PGs. Admin can add new PGs from dashboard.</p>
+<div class="nav">
+  <div class="container nav-inner">
+    <div class="brand">
+      <div class="logo">🏡</div>
+      <a href="/">Rent Spot</a>
     </div>
 
-    <% if (!pgs || pgs.length === 0) { %>
-      <div class="card">No PG added yet.</div>
-    <% } else { %>
-      <div class="grid">
-        <% pgs.forEach(pg => { 
-          const imgs = imageMap.get(pg.id) || [];
-          const cover = imgs[0] ? ("/uploads/" + imgs[0]) : "";
-        %>
-          <div class="card">
-            <% if (cover) { %>
-              <img class="img" src="<%= cover %>">
-            <% } else { %>
-              <div class="img"></div>
-            <% } %>
-
-            <h3 style="margin:10px 0 6px;"><%= pg.title %></h3>
-            <div class="small"><%= pg.city %> <%= pg.area ? ("- " + pg.area) : "" %></div>
-            <div style="margin:8px 0;"><b>₹<%= pg.price %></b> / month</div>
-
-            <div class="row">
-              <a class="btn secondary" href="/pg/<%= pg.id %>">View</a>
-              <% if (currentUser) { %>
-                <a class="btn" href="/book/<%= pg.id %>">Book</a>
-              <% } else { %>
-                <a class="btn" href="/login">Login to Book</a>
-              <% } %>
-            </div>
-          </div>
-        <% }) %>
-      </div>
-    <% } %>
+    <div class="nav-links">
+      <% if(user){ %>
+        <a class="btn" href="/my-bookings">My Bookings</a>
+        <a class="btn" href="/messages">Messages <% if(unread>0){ %>(<%= unread %>)<% } %></a>
+        <% if(user.role==="admin"){ %>
+          <a class="btn" href="/admin">Dashboard</a>
+        <% } %>
+        <a class="btn" href="/logout">Logout</a>
+      <% } else { %>
+        <a class="btn" href="/login">Login</a>
+        <a class="btn btn-primary" href="/register">Register</a>
+      <% } %>
+    </div>
   </div>
+</div>
+
+<div class="container">
+
+  <!-- HERO PANEL -->
+  <div class="hero">
+    <div>
+      <h1>Find Your Perfect PG</h1>
+      <p>Affordable rooms, verified listings and instant booking.</p>
+
+      <% if(!user){ %>
+        <a href="/register" class="hero-btn">SIGN UP</a>
+      <% } else { %>
+        <a href="/my-bookings" class="hero-btn">MY BOOKINGS</a>
+      <% } %>
+    </div>
+
+    <div>
+      <div style="background:#fff; height:160px; border-radius:20px;"></div>
+    </div>
+  </div>
+
+  <h2>Available PG</h2>
+
+  <div class="cards">
+    <% properties.forEach(p => { %>
+      <div class="card">
+        <% if(p.image){ %>
+          <img src="/uploads/<%= p.image %>">
+        <% } else { %>
+          <img src="https://via.placeholder.com/400x200?text=No+Image">
+        <% } %>
+
+        <div class="card-body">
+          <h3><%= p.title %></h3>
+          <div class="muted"><%= p.location %></div>
+          <div>₹ <b><%= p.price %></b>/month</div>
+          <div class="muted">Rating: <%= p.avg_rating || 0 %> ★ (<%= p.rating_count || 0 %>)</div>
+
+          <div style="margin-top:10px;">
+            <a class="btn" href="/property/<%= p.id %>">View</a>
+          </div>
+        </div>
+      </div>
+    <% }) %>
+  </div>
+
+</div>
+
 </body>
 </html>
