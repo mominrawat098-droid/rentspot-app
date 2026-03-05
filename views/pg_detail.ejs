@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="/style.css">
+  <title><%= pg.title %></title>
+</head>
+<body>
+  <%- include("partials_nav") %>
+
+  <div class="container" style="padding:18px 0 28px;">
+    <div class="card">
+      <h2 style="margin:0;"><%= pg.title %></h2>
+      <div class="muted" style="margin-top:6px;"><%= pg.city %> • ₹<%= pg.price %>/month</div>
+      <div class="muted" style="margin-top:6px;">⭐ <%= stats.avg_rating ? stats.avg_rating : "0" %> (<%= stats.cnt || 0 %> reviews)</div>
+
+      <div style="margin-top:10px;"><b>Address:</b> <%= pg.address || "-" %></div>
+      <div style="margin-top:6px;"><b>Phone:</b> <%= pg.phone || "-" %></div>
+      <div style="margin-top:6px;"><b>Description:</b> <%= pg.description || "-" %></div>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <h3>Photos</h3>
+      <% if (!photos || photos.length === 0) { %>
+        <p>No photos.</p>
+      <% } else { %>
+        <div class="photos">
+          <% photos.forEach(p => { %>
+            <img src="<%= p.file_path %>" alt="pg photo">
+          <% }) %>
+        </div>
+      <% } %>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <h3>Book this PG</h3>
+      <% if (!me) { %>
+        <p>Please <a href="/login">login</a> to book.</p>
+      <% } else { %>
+        <form action="/pg/<%= pg.id %>/book" method="post">
+          <label>Message (optional)</label>
+          <textarea name="message" rows="3" placeholder="I want to book..."></textarea>
+          <button class="btn" type="submit" style="margin-top:10px;">Send Booking Request</button>
+        </form>
+      <% } %>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <h3>Reviews</h3>
+
+      <% if (!me) { %>
+        <p>Please <a href="/login">login</a> to write review.</p>
+      <% } else { %>
+        <form action="/pg/<%= pg.id %>/review" method="post" style="margin-bottom:14px;">
+          <label>Rating (1 to 5)</label>
+          <select name="rating" required>
+            <option value="5">5 - Excellent</option>
+            <option value="4">4 - Good</option>
+            <option value="3">3 - Ok</option>
+            <option value="2">2 - Bad</option>
+            <option value="1">1 - Worst</option>
+          </select>
+
+          <label>Comment</label>
+          <textarea name="comment" rows="3" placeholder="Write something..."></textarea>
+          <button class="btn" type="submit" style="margin-top:10px;">Submit Review</button>
+        </form>
+      <% } %>
+
+      <% if (!reviews || reviews.length === 0) { %>
+        <p>No reviews yet.</p>
+      <% } else { %>
+        <% reviews.forEach(r => { %>
+          <div style="padding:10px 0; border-top:1px solid #eee;">
+            <b><%= r.user_name %></b> • ⭐ <%= r.rating %>
+            <div class="muted"><%= r.created_at %></div>
+            <div style="margin-top:6px;"><%= r.comment || "" %></div>
+          </div>
+        <% }) %>
+      <% } %>
+    </div>
+  </div>
+</body>
+</html>

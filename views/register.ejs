@@ -5,40 +5,33 @@
   <link rel="stylesheet" href="/style.css">
   <title>Register</title>
 </head>
-<body class="auth-body">
-<div class="auth-container">
+<body>
+  <%- include("partials_nav") %>
 
-  <div class="auth-left">
-    <h2>Create Account</h2>
+  <div class="container" style="padding:18px 0;">
+    <h2>Register</h2>
 
-    <% if(error){ %><div class="alert error"><%= error %></div><% } %>
-    <% if(success){ %><div class="alert success"><%= success %></div><% } %>
+    <% if (error) { %>
+      <div class="alert"><%= error %></div>
+    <% } %>
 
-    <form method="POST" action="/register">
-      <label>Full Name</label>
-      <input type="text" name="name" required>
+    <form class="card" action="/register" method="post">
+      <label>Name</label>
+      <input name="name" required>
 
       <label>Email</label>
-      <input type="email" name="email" required>
+      <input name="email" type="email" required>
 
       <label>Password</label>
-      <input type="password" name="password" required>
+      <input name="password" type="password" required>
 
-      <button class="btn btn-primary" style="width:100%; margin-top:12px;">SIGN UP</button>
+      <button class="btn" type="submit" style="margin-top:12px;">Create Account</button>
+      <div class="muted" style="margin-top:10px;">Already have account? <a href="/login">Login</a></div>
     </form>
 
-    <div style="margin-top:12px;">
-      <span class="muted">Already have an account?</span>
-      <a class="btn" href="/login" style="margin-left:8px;">Go to Login</a>
+    <div class="muted" style="margin-top:10px;">
+      Note: First registered user becomes <b>Admin</b>.
     </div>
   </div>
-
-  <div class="auth-right">
-    <h2>Welcome Back!</h2>
-    <p>To keep connected with us please login with your personal info</p>
-    <a href="/login" class="btn" style="margin-top:14px;">SIGN IN</a>
-  </div>
-
-</div>
 </body>
 </html>

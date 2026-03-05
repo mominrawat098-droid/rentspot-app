@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="/style.css">
+  <title>Bookings</title>
+</head>
+<body>
+  <%- include("partials_nav") %>
+
+  <div class="container" style="padding:18px 0;">
+    <h2>Bookings (Admin)</h2>
+
+    <% if (!bookings || bookings.length === 0) { %>
+      <p>No bookings.</p>
+    <% } else { %>
+      <div class="card">
+        <% bookings.forEach(b => { %>
+          <div style="padding:12px; border-bottom:1px solid #eee;">
+            <b><%= b.pg_title %></b>
+            <div class="muted">User: <%= b.user_email %></div>
+            <div class="muted">Status: <%= b.status %></div>
+            <div style="margin-top:6px;"><%= b.message || "" %></div>
+            <div class="muted" style="margin-top:6px;"><%= b.created_at %></div>
+          </div>
+        <% }) %>
+      </div>
+    <% } %>
+  </div>
+</body>
+</html>

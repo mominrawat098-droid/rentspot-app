@@ -1,78 +1,114 @@
+// database.js
+const path = require("path");
 const sqlite3 = require("sqlite3").verbose();
-const db = new sqlite3.Database("./rentspot.db");
 
-db.serialize(() => {
-  db.run(`CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    email TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    role TEXT DEFAULT 'user',
-    status TEXT DEFAULT 'Pending'
-  )`);
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, "rentspot.db");
+const db = new sqlite3.Database(DB_PATH);
 
-  db.run(`CREATE TABLE IF NOT EXISTS properties (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    location TEXT NOT NULL,
-    description TEXT,
-    price INTEGER NOT NULL DEFAULT 0,
-    image TEXT,
-    contact_phone TEXT
-  )`);
-
-  db.run(`CREATE TABLE IF NOT EXISTS ratings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    property_id INTEGER NOT NULL,
-    stars INTEGER NOT NULL,
-    comment TEXT,
-    UNIQUE(user_id, property_id)
-  )`);
-
-  db.run(`CREATE TABLE IF NOT EXISTS bookings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    property_id INTEGER NOT NULL,
-    full_name TEXT NOT NULL,
-    phone TEXT NOT NULL,
-    persons INTEGER NOT NULL DEFAULT 1,
-    checkin_date TEXT NOT NULL,
-    checkout_date TEXT NOT NULL,
-    amount INTEGER NOT NULL DEFAULT 0,
-    approval_status TEXT DEFAULT 'Pending',
-    payment_status TEXT DEFAULT 'Pending',
-    payment_method TEXT,
-    transaction_id TEXT
-  )`);
-
-  db.run(`CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    to_user_id INTEGER NOT NULL,
-    subject TEXT NOT NULL,
-    message TEXT NOT NULL,
-    is_read INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-
-  db.run(`CREATE TABLE IF NOT EXISTS settings (
-    id INTEGER PRIMARY KEY CHECK (id=1),
-    upi_id TEXT,
-    qr_image TEXT
-  )`);
-
-  db.get("SELECT id FROM settings WHERE id=1", (err, row) => {
-    if (!row) db.run("INSERT INTO settings (id, upi_id, qr_image) VALUES (1,'','')");
+// Promisified helpers
+db.runAsync = (sql, params = []) =>
+  new Promise((resolve, reject) => {
+    db.run(sql, params, function (err) {
+      if (err) return reject(err);
+      resolve(this);
+    });
   });
 
-  db.get("SELECT id FROM users WHERE email=?", ["admin@gmail.com"], (err, row) => {
-    if (!row) {
-      db.run(
-        "INSERT INTO users (name,email,password,role,status) VALUES (?,?,?,?,?)",
-        ["Admin", "admin@gmail.com", "1234", "admin", "Approved"]
-      );
-    }
+db.getAsync = (sql, params = []) =>
+  new Promise((resolve, reject) => {
+    db.get(sql, params, (err, row) => {
+      if (err) return reject(err);
+      resolve(row);
+    });
   });
-});
+
+db.allAsync = (sql, params = []) =>
+  new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => {
+      if (err) return reject(err);
+      resolve(rows);
+    });
+  });
+
+async function initDb() {
+  // USERS
+  await db.runAsync(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      role TEXT DEFAULT 'user',
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  // PG
+  await db.runAsync(`
+    CREATE TABLE IF NOT EXISTS pgs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      city TEXT NOT NULL,
+      address TEXT,
+      price INTEGER NOT NULL,
+      phone TEXT,
+      description TEXT,
+      created_by INTEGER,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  // PG PHOTOS (multiple)
+  await db.runAsync(`
+    CREATE TABLE IF NOT EXISTS pg_photos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      pg_id INTEGER NOT NULL,
+      file_path TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  // REVIEWS
+  await db.runAsync(`
+    CREATE TABLE IF NOT EXISTS reviews (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      pg_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      rating INTEGER NOT NULL,
+      comment TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  // BOOKINGS
+  await db.runAsync(`
+    CREATE TABLE IF NOT EXISTS bookings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      pg_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      message TEXT,
+      status TEXT DEFAULT 'pending',
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  // NOTIFICATIONS
+  await db.runAsync(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      recipient TEXT NOT NULL,               -- user email OR "admin"
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      link TEXT,
+      is_read INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  await db.runAsync(`CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON notifications(recipient)`);
+  await db.runAsync(`CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(is_read)`);
+}
+
+initDb().catch((e) => console.error("DB init error:", e));
 
 module.exports = db;
