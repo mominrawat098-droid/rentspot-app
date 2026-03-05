@@ -1,50 +1,72 @@
-// database.js
+// database.js (SQLite) - Fresh + Auto Migration + Works with server.js
 const path = require("path");
 const sqlite3 = require("sqlite3").verbose();
 
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, "rentspot.db");
+const DB_PATH = process.env.SQLITE_PATH || path.join(__dirname, "rentspot.db");
 const db = new sqlite3.Database(DB_PATH);
 
 // Promisified helpers
-db.runAsync = (sql, params = []) =>
-  new Promise((resolve, reject) => {
+function run(sql, params = []) {
+  return new Promise((resolve, reject) => {
     db.run(sql, params, function (err) {
       if (err) return reject(err);
-      resolve(this);
+      resolve(this); // has lastID
     });
   });
+}
 
-db.getAsync = (sql, params = []) =>
-  new Promise((resolve, reject) => {
+function get(sql, params = []) {
+  return new Promise((resolve, reject) => {
     db.get(sql, params, (err, row) => {
       if (err) return reject(err);
-      resolve(row);
+      resolve(row || null);
     });
   });
+}
 
-db.allAsync = (sql, params = []) =>
-  new Promise((resolve, reject) => {
+function all(sql, params = []) {
+  return new Promise((resolve, reject) => {
     db.all(sql, params, (err, rows) => {
       if (err) return reject(err);
-      resolve(rows);
+      resolve(rows || []);
     });
   });
+}
 
-async function initDb() {
-  // USERS
-  await db.runAsync(`
+// DB schema init + migrations
+async function initSchema() {
+  // USERS table (new schema)
+  await run(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       email TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
+      password_hash TEXT,
       role TEXT DEFAULT 'user',
       created_at TEXT DEFAULT (datetime('now'))
     )
   `);
 
-  // PG
-  await db.runAsync(`
+  // MIGRATION: add password_hash if missing
+  const userCols = await all(`PRAGMA table_info(users)`);
+  const hasPasswordHash = userCols.some((c) => c.name === "password_hash");
+
+  if (!hasPasswordHash) {
+    await run(`ALTER TABLE users ADD COLUMN password_hash TEXT`);
+  }
+
+  // Optional: if old column "password" exists, copy it into password_hash (best effort)
+  const hasPasswordCol = userCols.some((c) => c.name === "password");
+  if (hasPasswordCol) {
+    try {
+      await run(`UPDATE users SET password_hash = password WHERE password_hash IS NULL`);
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  // PGs
+  await run(`
     CREATE TABLE IF NOT EXISTS pgs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
@@ -58,8 +80,8 @@ async function initDb() {
     )
   `);
 
-  // PG PHOTOS (multiple)
-  await db.runAsync(`
+  // PG photos (multiple)
+  await run(`
     CREATE TABLE IF NOT EXISTS pg_photos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       pg_id INTEGER NOT NULL,
@@ -68,8 +90,8 @@ async function initDb() {
     )
   `);
 
-  // REVIEWS
-  await db.runAsync(`
+  // Reviews
+  await run(`
     CREATE TABLE IF NOT EXISTS reviews (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       pg_id INTEGER NOT NULL,
@@ -80,8 +102,8 @@ async function initDb() {
     )
   `);
 
-  // BOOKINGS
-  await db.runAsync(`
+  // Bookings
+  await run(`
     CREATE TABLE IF NOT EXISTS bookings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       pg_id INTEGER NOT NULL,
@@ -92,11 +114,11 @@ async function initDb() {
     )
   `);
 
-  // NOTIFICATIONS
-  await db.runAsync(`
+  // Notifications
+  await run(`
     CREATE TABLE IF NOT EXISTS notifications (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      recipient TEXT NOT NULL,               -- user email OR "admin"
+      recipient TEXT NOT NULL,   -- user email OR 'admin'
       title TEXT NOT NULL,
       message TEXT NOT NULL,
       link TEXT,
@@ -105,10 +127,17 @@ async function initDb() {
     )
   `);
 
-  await db.runAsync(`CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON notifications(recipient)`);
-  await db.runAsync(`CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(is_read)`);
+  // Useful indexes
+  await run(`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_reviews_pg ON reviews(pg_id)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id)`);
+  await run(`CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON notifications(recipient)`);
 }
 
-initDb().catch((e) => console.error("DB init error:", e));
-
-module.exports = db;
+module.exports = {
+  db,
+  run,
+  get,
+  all,
+  initSchema
+};
